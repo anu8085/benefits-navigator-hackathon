@@ -1,4 +1,4 @@
-"""Follow-up question generation and answer application for the Family Navigator."""
+"""Follow-up question generation, answer parsing, and profile merging for the Family Navigator."""
 from __future__ import annotations
 import json
 import re
@@ -7,44 +7,113 @@ from .config import ANTHROPIC_API_KEY, CLAUDE_MODEL, CLAUDE_AVAILABLE
 
 _FOLLOWUP_SYSTEM = """\
 You are a benefits navigator assistant for families in India.
-Given a family's extracted profile, generate 2-3 follow-up questions to fill in missing information.
+Given a family's extracted profile, generate 2-3 short follow-up questions to gather missing context.
 
 Return ONLY a valid JSON array — no markdown fences, no preamble, no explanation.
 Each element must be a JSON object with exactly these keys:
-  "id"       — short snake_case identifier (e.g. "insurance", "urgency", "travel_distance")
-  "question" — question text (plain English, simple enough to read aloud)
-  "type"     — "radio" or "text"
-  "options"  — list of option strings for radio questions, or [] for text questions
+  "id"          — short snake_case identifier (e.g. "insurance", "urgency", "travel_distance")
+  "question"    — question text (plain English, simple enough to read aloud)
+  "type"        — always "text"
+  "options"     — always []
+  "placeholder" — a short example answer in plain English
 
 Rules:
 - Return EXACTLY 2-3 question objects.
-- If pincode is null or missing, make the first question a "text" type asking for it.
-- Ask about health insurance status if not clearly stated in the description.
-  Use options: ["Yes, I have insurance", "No, I don't have insurance", "Not sure"]
-- Ask about travel distance preference if a pincode is known.
-  Use options: ["Up to 5 km", "Up to 10 km", "Up to 25 km"]
+- All questions must use type "text". Do NOT use radio or select.
+- If pincode is null or missing, make the first question ask for it.
+  Example placeholder: "560001" or "Bangalore area".
+- Ask about health insurance or cost situation if not clearly stated.
+  Example question: "Tell us about your current health insurance or cost situation."
+  Example placeholder: "I do not have insurance and need low-cost care."
+- Ask about travel distance if a pincode is available.
+  Example question: "How far can you travel to reach a health facility?"
+  Example placeholder: "Up to 5 km."
 - Ask about urgency.
-  Use options: ["Urgent — I need help today", "Routine — planning ahead"]
+  Example question: "Is this urgent today, or are you planning ahead?"
+  Example placeholder: "It is urgent today, but not an emergency."
 - Do NOT mention any government scheme names (no Ayushman Bharat, ICDS, JSY, PMMVY, etc.).
 - Keep all question text simple and plain.
 """
 
+# ── Signal keyword lists ──────────────────────────────────────────────────────
+
+_UNINSURED_SIGNALS = (
+    "no insurance",
+    "do not have insurance",
+    "don't have insurance",
+    "uninsured",
+    "without insurance",
+    "not insured",
+    "no health insurance",
+    "no coverage",
+    "without coverage",
+    "no medical insurance",
+)
+
+_INSURED_SIGNALS = (
+    "have insurance",
+    "i have insurance",
+    "am insured",
+    "with insurance",
+    "i'm insured",
+    "yes insurance",
+    "have coverage",
+    "have health insurance",
+)
+
+_AFFORDABILITY_SIGNALS = (
+    "low-cost",
+    "low cost",
+    "affordable",
+    "afford",
+    "cannot afford",
+    "can't afford",
+    "free care",
+    "free services",
+    "cost",
+)
+
+# Routine signals — checked first because they are more specific
+_ROUTINE_SIGNALS = (
+    "not urgent",
+    "routine",
+    "planning ahead",
+    "plan ahead",
+    "no rush",
+    "not in a hurry",
+    "planning",
+)
+
+# Urgent signals — checked after routine
+_URGENT_SIGNALS = (
+    "urgent",
+    "need help now",
+    "immediately",
+    "right now",
+    "asap",
+    "need today",
+    "help today",
+    "today",   # per spec: "today" → urgent
+    "soon",    # per spec: "soon" → urgent
+)
+
+
+# ── Question generation ───────────────────────────────────────────────────────
 
 def _deterministic_questions(profile: dict, raw_text: str = "") -> list[dict]:
-    """Return 2-3 deterministic follow-up questions based on what is missing or unclear."""
+    """Return 2-3 deterministic text-input follow-up questions based on what is missing."""
     questions: list[dict] = []
     raw_lower = (raw_text or "").lower()
 
-    # Priority 1 — location: pincode unknown
     if not profile.get("pincode"):
         questions.append({
             "id": "pincode",
             "question": "What is your pincode or nearest town/district?",
             "type": "text",
             "options": [],
+            "placeholder": "E.g. 560001 or Bangalore area",
         })
 
-    # Priority 2 — insurance: not explicitly mentioned in the description
     insurance_clear = any(
         kw in raw_lower
         for kw in ("insur", "uninsured", "no coverage", "have coverage")
@@ -52,34 +121,35 @@ def _deterministic_questions(profile: dict, raw_text: str = "") -> list[dict]:
     if not insurance_clear and len(questions) < 3:
         questions.append({
             "id": "insurance",
-            "question": "Do you currently have health insurance coverage?",
-            "type": "radio",
-            "options": ["Yes, I have insurance", "No, I don't have insurance", "Not sure"],
+            "question": "Tell us about your current health insurance or cost situation.",
+            "type": "text",
+            "options": [],
+            "placeholder": "I do not have insurance and need low-cost care.",
         })
 
-    # Priority 3 — travel distance: useful for facility recommendations when location known
     if profile.get("pincode") and len(questions) < 3:
         questions.append({
             "id": "travel_distance",
             "question": "How far can you travel to reach a health facility?",
-            "type": "radio",
-            "options": ["Up to 5 km", "Up to 10 km", "Up to 25 km"],
+            "type": "text",
+            "options": [],
+            "placeholder": "Up to 5 km.",
         })
 
-    # Priority 4 — urgency: always a useful planning signal
     if len(questions) < 3:
         questions.append({
             "id": "urgency",
-            "question": "Is this urgent today, or are you looking for routine support?",
-            "type": "radio",
-            "options": ["Urgent — I need help today", "Routine — planning ahead"],
+            "question": "Is this urgent today, or are you planning ahead?",
+            "type": "text",
+            "options": [],
+            "placeholder": "It is urgent today, but not an emergency.",
         })
 
     return questions[:3]
 
 
 def generate_followup_questions(profile: dict, raw_text: str = "") -> list[dict]:
-    """Return 2-3 follow-up question dicts. Claude-first, deterministic fallback."""
+    """Return 2-3 text-input follow-up question dicts. Claude-first, deterministic fallback."""
     if CLAUDE_AVAILABLE:
         try:
             import anthropic
@@ -94,7 +164,7 @@ def generate_followup_questions(profile: dict, raw_text: str = "") -> list[dict]
             client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
             response = client.messages.create(
                 model=CLAUDE_MODEL,
-                max_tokens=400,
+                max_tokens=500,
                 system=_FOLLOWUP_SYSTEM,
                 messages=[{"role": "user", "content": user_msg}],
             )
@@ -103,7 +173,6 @@ def generate_followup_questions(profile: dict, raw_text: str = "") -> list[dict]
                 block.text for block in response.content if block.type == "text"
             ).strip()
 
-            # Strip markdown fences if Claude wrapped the JSON
             raw_resp = re.sub(r"^```[a-z]*\n?", "", raw_resp, flags=re.MULTILINE)
             raw_resp = re.sub(r"\n?```$", "", raw_resp.rstrip()).strip()
 
@@ -115,8 +184,9 @@ def generate_followup_questions(profile: dict, raw_text: str = "") -> list[dict]
                         validated.append({
                             "id": str(item.get("id", "q")),
                             "question": str(item.get("question", "")),
-                            "type": str(item.get("type", "radio")),
-                            "options": list(item.get("options", [])),
+                            "type": "text",
+                            "options": [],
+                            "placeholder": str(item.get("placeholder", "")),
                         })
                 if validated:
                     return validated
@@ -126,67 +196,108 @@ def generate_followup_questions(profile: dict, raw_text: str = "") -> list[dict]
     return _deterministic_questions(profile, raw_text)
 
 
+# ── Answer parsing and profile merging ───────────────────────────────────────
+
+def parse_followup_answers(
+    questions: list[dict],
+    answers: dict[str, str],
+) -> dict:
+    """Parse free-text follow-up answers into a structured followup_updates dict.
+
+    Returns only the fields that could be extracted from the answers.
+    Pincode and child-age are question-specific; everything else is holistic.
+    """
+    updates: dict = {}
+
+    # Question-specific parsing
+    for q in questions:
+        qid = q.get("id", "")
+        ans = (answers.get(qid) or "").strip()
+        if not ans:
+            continue
+
+        if "pincode" in qid or "location" in qid:
+            if re.fullmatch(r"\d{6}", ans):
+                updates["pincode"] = ans
+
+        elif "child" in qid and "age" in qid:
+            ans_lower = ans.lower()
+            m = re.search(r"(\d+)\s*(?:month|mo)", ans_lower)
+            if m:
+                months = int(m.group(1))
+                updates["child_age_months"] = months
+                updates["child_under_5"] = months < 60
+            else:
+                m2 = re.search(r"(\d+)\s*(?:year|yr)", ans_lower)
+                if m2:
+                    months = int(m2.group(1)) * 12
+                    updates["child_age_months"] = months
+                    updates["child_under_5"] = months < 60
+
+    # Holistic scan across all answer text
+    all_text = " ".join(str(v).lower() for v in answers.values() if v).strip()
+    if not all_text:
+        return updates
+
+    # Insurance status
+    if any(kw in all_text for kw in _UNINSURED_SIGNALS):
+        updates["uninsured"] = True
+        updates["insurance_status"] = "no_insurance"
+    elif any(kw in all_text for kw in _INSURED_SIGNALS):
+        updates["uninsured"] = False
+        updates["insurance_status"] = "insured"
+
+    # Affordability / low-cost need
+    if any(kw in all_text for kw in _AFFORDABILITY_SIGNALS):
+        updates["low_cost_need"] = True
+
+    # Travel distance — word-number forms first, then digit forms
+    km_found: int | None = None
+    if re.search(r"\btwenty.?five\s*km\b", all_text):
+        km_found = 25
+    elif re.search(r"\bten\s*km\b", all_text):
+        km_found = 10
+    elif re.search(r"\bfive\s*km\b", all_text):
+        km_found = 5
+    if km_found is None:
+        for km_str in ("25", "10", "5"):
+            if re.search(rf"\b{km_str}\s*km\b", all_text):
+                km_found = int(km_str)
+                break
+    if km_found is not None:
+        updates["travel_km"] = km_found
+
+    # Urgency — routine first (more specific phrase), then urgent
+    if any(kw in all_text for kw in _ROUTINE_SIGNALS):
+        updates["urgency"] = "routine"
+    elif any(kw in all_text for kw in _URGENT_SIGNALS):
+        updates["urgency"] = "urgent"
+
+    return updates
+
+
+def merge_profile(base_profile: dict, followup_updates: dict) -> dict:
+    """Create final_profile by applying followup_updates onto base_profile.
+
+    Maps low_cost_need → low_income so the rules engine can match
+    health_insurance_awareness without knowing about the display-layer key.
+    """
+    final = base_profile.copy()
+    for key, value in followup_updates.items():
+        if key == "low_cost_need":
+            final["low_cost_need"] = value
+            if value:
+                final["low_income"] = True
+        else:
+            final[key] = value
+    return final
+
+
 def apply_followup_answers(
     profile: dict,
     questions: list[dict],
     answers: dict[str, str],
 ) -> dict:
-    """Merge follow-up answers into a copy of the profile and return the updated copy."""
-    updated = profile.copy()
-
-    for q in questions:
-        qid = q["id"]
-        ans = answers.get(qid) or ""
-        if not ans:
-            continue
-        ans_lower = ans.lower().strip()
-
-        if "pincode" in qid or "location" in qid:
-            candidate = ans.strip()
-            if re.fullmatch(r"\d{6}", candidate):
-                updated["pincode"] = candidate
-
-        elif "insurance" in qid:
-            if re.match(r"no\b", ans_lower):
-                updated["uninsured"] = True
-            elif re.match(r"yes\b", ans_lower):
-                updated["uninsured"] = False
-            # "Not sure" → leave profile unchanged
-
-        elif "urgency" in qid or "urgent" in qid:
-            updated["urgency"] = "urgent" if "urgent" in ans_lower else "routine"
-
-        elif "travel" in qid or "distance" in qid:
-            # Check longest match first to avoid "5" matching "25"
-            for km_str in ("25", "10", "5"):
-                if km_str in ans:
-                    updated["travel_km"] = int(km_str)
-                    break
-
-        elif "pregnancy" in qid or "pregnant" in qid:
-            if "recently" in ans_lower or "delivered" in ans_lower or "postnatal" in ans_lower:
-                updated["pregnant"] = False
-                updated["recently_delivered"] = True
-                updated["adult_woman"] = True
-            elif "pregnant" in ans_lower:
-                updated["pregnant"] = True
-                updated["recently_delivered"] = False
-                updated["adult_woman"] = True
-            else:
-                updated["pregnant"] = False
-                updated["recently_delivered"] = False
-
-        elif "child" in qid and "age" in qid:
-            m = re.search(r"(\d+)\s*(?:month|mo)", ans_lower)
-            if m:
-                months = int(m.group(1))
-                updated["child_age_months"] = months
-                updated["child_under_5"] = months < 60
-            else:
-                m2 = re.search(r"(\d+)\s*(?:year|yr)", ans_lower)
-                if m2:
-                    months = int(m2.group(1)) * 12
-                    updated["child_age_months"] = months
-                    updated["child_under_5"] = months < 60
-
-    return updated
+    """Convenience wrapper: parse answers then merge into profile copy."""
+    updates = parse_followup_answers(questions, answers)
+    return merge_profile(profile, updates)

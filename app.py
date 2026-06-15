@@ -3,6 +3,11 @@
 Runs entirely on local sample JSON files + SQLite.
 No live Databricks / Unity Catalog / Lakebase connections in this gate.
 Claude API is used if ANTHROPIC_API_KEY is set; falls back to deterministic otherwise.
+
+Session flow:
+  Screen 1 (step=0) — original scenario input
+  Screen 2 (step=1) — follow-up questions + profile card + "Generate support plan"
+  Screen 3 (step=2) — matched pathways, action plan, NFHS indicators, facilities
 """
 from __future__ import annotations
 
@@ -23,7 +28,12 @@ from src.data_loader import (
     load_scenarios,
 )
 from src.profile_extractor import extract_profile
-from src.followup import apply_followup_answers, generate_followup_questions
+from src.followup import (
+    apply_followup_answers,
+    generate_followup_questions,
+    merge_profile,
+    parse_followup_answers,
+)
 from src.rules_engine import _eval_condition, match_pathways
 from src.action_plan import generate_action_plan
 from src.state_store import StateStore
@@ -36,7 +46,7 @@ from src.ui_helpers import (
     state_store_label,
 )
 
-# ── Page config ─────────────────────────────────────────────────────────────
+# ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="BenefitBridge AI",
     page_icon="🌉",
@@ -47,10 +57,12 @@ st.set_page_config(
 # ── Session state init ───────────────────────────────────────────────────────
 _STATE_DEFAULTS: dict = {
     "step": 0,
-    "raw_text": "",
-    "profile": None,
+    "original_text": "",
+    "base_profile": None,
     "followup_questions": [],
     "followup_answers": {},
+    "followup_updates": {},
+    "final_profile": None,
     "matched_pathways": [],
     "action_plan": "",
     "plan_method": "",
@@ -84,7 +96,7 @@ tab1, tab2, tab3 = st.tabs(
 with tab1:
     step = st.session_state.step
 
-    # ── STEP 0: Free-text input ─────────────────────────────────────────────
+    # ── SCREEN 1: Scenario input ────────────────────────────────────────────
     if step == 0:
         st.subheader("Tell us about your family")
 
@@ -94,13 +106,13 @@ with tab1:
             demo_cols = st.columns(min(len(scenarios), 3))
             for i, sc in enumerate(scenarios):
                 if demo_cols[i % 3].button(sc["title"][:55], key=f"demo_{i}"):
-                    st.session_state.raw_text = sc["scenario_text"]
+                    st.session_state.original_text = sc["scenario_text"]
                     st.rerun()
 
         st.markdown("---")
         raw = st.text_area(
             "Describe your family's situation and health needs:",
-            value=st.session_state.raw_text,
+            value=st.session_state.original_text,
             height=130,
             placeholder=(
                 "Example: I live in pincode 560001. I am pregnant and have a 3-year-old child. "
@@ -115,9 +127,9 @@ with tab1:
                 else "Extracting profile…"
             )
             with st.spinner(spinner_msg):
-                profile = extract_profile(raw.strip())
+                base_profile = extract_profile(raw.strip())
 
-                pincode = profile.get("pincode") or ""
+                pincode = base_profile.get("pincode") or ""
                 district_info: dict = {}
                 nfhs_rows: list[dict] = []
                 facilities: list[dict] = []
@@ -125,8 +137,8 @@ with tab1:
                 if pincode:
                     district_info = get_district_for_pincode(pincode) or {}
                     if district_info:
-                        profile["district_norm"] = district_info["district_norm"]
-                        profile["state_norm"] = district_info["state_norm"]
+                        base_profile["district_norm"] = district_info["district_norm"]
+                        base_profile["state_norm"] = district_info["state_norm"]
                         nfhs_rows = get_nfhs_for_district(
                             district_info["district_norm"], district_info["state_norm"]
                         )
@@ -134,21 +146,23 @@ with tab1:
                             pincode, district_info["district_norm"], district_info["state_norm"]
                         )
 
-                followup_qs = generate_followup_questions(profile, raw.strip())
+                followup_qs = generate_followup_questions(base_profile, raw.strip())
 
-            st.session_state.raw_text = raw.strip()
-            st.session_state.profile = profile
+            st.session_state.original_text = raw.strip()
+            st.session_state.base_profile = base_profile
             st.session_state.district_info = district_info
             st.session_state.nfhs_rows = nfhs_rows
             st.session_state.facilities_list = facilities
             st.session_state.followup_questions = followup_qs
             st.session_state.followup_answers = {}
+            st.session_state.followup_updates = {}
+            st.session_state.final_profile = None
             st.session_state.step = 1
             st.rerun()
 
-    # ── STEP 1: Follow-up questions (agentic clarification) ─────────────────
+    # ── SCREEN 2: Follow-up questions + profile card ─────────────────────────
     elif step == 1:
-        profile: dict = st.session_state.profile
+        base_profile: dict = st.session_state.base_profile
         questions: list[dict] = st.session_state.followup_questions
 
         st.subheader("A few quick questions to personalise your plan")
@@ -157,56 +171,147 @@ with tab1:
         )
 
         with st.expander("Your original description", expanded=False):
-            st.write(st.session_state.raw_text)
+            st.write(st.session_state.original_text)
 
-        st.markdown("")
-
-        if not questions:
-            # Safety valve: if no questions generated, skip straight to profile review
-            st.session_state.step = 2
-            st.rerun()
-
+        # ── Follow-up form with profile card inside ──────────────────────────
         form_answers: dict[str, str] = {}
         with st.form("followup_form"):
             for q in questions:
-                if q.get("type") == "radio" and q.get("options"):
-                    form_answers[q["id"]] = st.radio(
-                        q["question"],
-                        options=q["options"],
-                        index=0,
-                        key=f"fq_{q['id']}",
+                form_answers[q["id"]] = st.text_input(
+                    q["question"],
+                    key=f"fq_{q['id']}",
+                    placeholder=q.get("placeholder", "Type your answer here…"),
+                )
+
+            # ── Compact profile card (base_profile summary) ──────────────────
+            st.markdown("---")
+            st.markdown("**Profile used for matching**")
+
+            _di = st.session_state.district_info
+            _pin = base_profile.get("pincode") or "—"
+            _dist = _di.get("district_norm", "") or "—"
+            _state_name = _di.get("state_norm", "")
+            _loc = f"{_dist}, {_state_name}".strip(", ") or "—"
+
+            if base_profile.get("pregnant"):
+                _preg_str = "Pregnant"
+            elif base_profile.get("recently_delivered"):
+                _preg_str = "Recently delivered"
+            else:
+                _preg_str = "Not pregnant"
+
+            if base_profile.get("child_under_5"):
+                _age_m = base_profile.get("child_age_months")
+                if _age_m:
+                    _yrs = _age_m // 12
+                    _rem = _age_m % 12
+                    _child_str = (
+                        f"{_age_m} months ({_yrs}y {_rem}m)" if _rem
+                        else f"{_age_m} months ({_yrs} yr)"
                     )
                 else:
-                    form_answers[q["id"]] = st.text_input(
-                        q["question"],
-                        key=f"fq_{q['id']}",
-                        placeholder="Type your answer here…",
-                    )
-            submitted = st.form_submit_button(
-                "Answer follow-up questions and generate plan",
-                type="primary",
+                    _child_str = "Under 5 (age not specified)"
+            else:
+                _child_str = "No child under 5"
+
+            _needs = base_profile.get("needs") or []
+            _needs_str = ", ".join(_needs) if _needs else "—"
+
+            _ins_parts = []
+            if base_profile.get("uninsured") is True:
+                _ins_parts.append("No insurance (extracted)")
+            if base_profile.get("low_income"):
+                _ins_parts.append("Low-cost need (extracted)")
+            _ins_str = " · ".join(_ins_parts) if _ins_parts else "Answer above to complete"
+
+            _travel_km = base_profile.get("travel_km")
+            _travel_str = f"Up to {_travel_km} km" if _travel_km else "Answer above to complete"
+
+            _urgency = base_profile.get("urgency", "")
+            _urgency_str = _urgency.capitalize() if _urgency else "Answer above to complete"
+
+            _pc1, _pc2 = st.columns(2)
+            with _pc1:
+                st.write(f"**PIN:** {_pin}")
+                st.write(f"**District / State:** {_loc}")
+                st.write(f"**Pregnancy status:** {_preg_str}")
+                st.write(f"**Child age:** {_child_str}")
+            with _pc2:
+                st.write(f"**Needs detected:** {_needs_str}")
+                st.write(f"**Insurance / cost:** {_ins_str}")
+                st.write(f"**Travel range:** {_travel_str}")
+                st.write(f"**Urgency:** {_urgency_str}")
+
+            st.caption(
+                "Your answers above complete this profile before matching support pathways."
             )
 
-        if submitted:
-            updated_profile = apply_followup_answers(profile, questions, form_answers)
+            submitted = st.form_submit_button("Generate support plan", type="primary")
 
-            # If pincode was just provided via follow-up, look up district now
-            new_pin = updated_profile.get("pincode") or ""
-            if new_pin and not st.session_state.district_info:
-                new_di = get_district_for_pincode(new_pin) or {}
-                if new_di:
-                    updated_profile["district_norm"] = new_di["district_norm"]
-                    updated_profile["state_norm"] = new_di["state_norm"]
-                    st.session_state.district_info = new_di
+        if submitted:
+            # 1 — Parse free-text answers → structured updates
+            followup_updates = parse_followup_answers(questions, form_answers)
+
+            # 2 — If pincode newly provided, look up district/NFHS/facilities
+            if "pincode" in followup_updates and not st.session_state.district_info:
+                _new_pin = followup_updates["pincode"]
+                _new_di = get_district_for_pincode(_new_pin) or {}
+                if _new_di:
+                    followup_updates["district_norm"] = _new_di["district_norm"]
+                    followup_updates["state_norm"] = _new_di["state_norm"]
+                    st.session_state.district_info = _new_di
                     st.session_state.nfhs_rows = get_nfhs_for_district(
-                        new_di["district_norm"], new_di["state_norm"]
+                        _new_di["district_norm"], _new_di["state_norm"]
                     )
                     st.session_state.facilities_list = get_facilities(
-                        new_pin, new_di["district_norm"], new_di["state_norm"]
+                        _new_pin, _new_di["district_norm"], _new_di["state_norm"]
                     )
 
-            st.session_state.profile = updated_profile
+            # 3 — Merge base_profile + followup_updates → final_profile
+            final_profile = merge_profile(base_profile, followup_updates)
+
+            # 4 — Match pathways using final_profile (not base_profile)
+            matched = match_pathways(final_profile, pathways)
+
+            # 5 — Generate action plan
+            spin_msg = (
+                "Generating your support plan with Claude…"
+                if CLAUDE_AVAILABLE
+                else "Generating your support plan…"
+            )
+            with st.spinner(spin_msg):
+                plan_text, plan_method = generate_action_plan(
+                    final_profile,
+                    matched,
+                    st.session_state.nfhs_rows,
+                    st.session_state.facilities_list,
+                )
+
+            # 6 — Persist to SQLite with full lineage
+            _d = st.session_state.district_info
+            store.save_session(
+                raw_text=st.session_state.original_text,
+                profile=final_profile,
+                plan_text=plan_text,
+                plan_method=plan_method,
+                district_norm=_d.get("district_norm", ""),
+                state_norm=_d.get("state_norm", ""),
+                lineage={
+                    "base_profile": base_profile,
+                    "followup_answers": form_answers,
+                    "followup_updates": followup_updates,
+                    "matched_pathway_ids": [pw.get("pathway_id") for pw in matched],
+                    "facilities_count": len(st.session_state.facilities_list),
+                },
+            )
+
+            # 7 — Commit to session state
             st.session_state.followup_answers = form_answers
+            st.session_state.followup_updates = followup_updates
+            st.session_state.final_profile = final_profile
+            st.session_state.matched_pathways = matched
+            st.session_state.action_plan = plan_text
+            st.session_state.plan_method = plan_method
             st.session_state.step = 2
             st.rerun()
 
@@ -214,203 +319,112 @@ with tab1:
             st.session_state.step = 0
             st.rerun()
 
-    # ── STEP 2: Profile review / edit ───────────────────────────────────────
+    # ── SCREEN 3: Results ────────────────────────────────────────────────────
     elif step == 2:
-        profile: dict = st.session_state.profile
-
-        st.subheader("Confirm Your Family Profile")
-        method = profile.get("extraction_method", "unknown")
-        st.caption(
-            f"Profile extracted via **{method}**. "
-            "Tick or untick boxes to correct anything before we find pathways."
-        )
-
-        with st.expander("Original text", expanded=False):
-            st.write(st.session_state.raw_text)
-
-        c1, c2 = st.columns(2)
-        with c1:
-            profile["pincode"] = st.text_input("Pincode", value=profile.get("pincode") or "")
-            profile["pregnant"] = st.checkbox("Pregnant", value=bool(profile.get("pregnant")))
-            profile["recently_delivered"] = st.checkbox(
-                "Recently delivered", value=bool(profile.get("recently_delivered"))
+        # Safe-failure guard: final_profile must exist
+        if not st.session_state.final_profile:
+            st.warning(
+                "Please complete the follow-up questions first. "
+                "The results screen requires a completed profile."
             )
-            profile["adult_woman"] = st.checkbox(
-                "Adult woman", value=bool(profile.get("adult_woman"))
-            )
-            profile["child_under_5"] = st.checkbox(
-                "Child under 5 years", value=bool(profile.get("child_under_5"))
-            )
-            if profile["child_under_5"]:
-                age_val = st.number_input(
-                    "Child age (months)",
-                    min_value=0,
-                    max_value=59,
-                    value=int(profile.get("child_age_months") or 0),
-                    step=1,
-                )
-                profile["child_age_months"] = int(age_val)
-            else:
-                profile["child_age_months"] = None
-
-        with c2:
-            profile["nutrition_need"] = st.checkbox(
-                "Nutrition need", value=bool(profile.get("nutrition_need"))
-            )
-            profile["uninsured"] = st.checkbox(
-                "Uninsured / no health coverage", value=bool(profile.get("uninsured"))
-            )
-            profile["low_income"] = st.checkbox(
-                "Low income / BPL", value=bool(profile.get("low_income"))
-            )
-            profile["water_sanitation_need"] = st.checkbox(
-                "Water / sanitation need", value=bool(profile.get("water_sanitation_need"))
-            )
-            profile["child_diarrhea_risk"] = st.checkbox(
-                "Child diarrhea risk", value=bool(profile.get("child_diarrhea_risk"))
-            )
-            profile["screening_need"] = st.checkbox(
-                "Preventive screening need", value=bool(profile.get("screening_need"))
-            )
-
-        st.session_state.profile = profile
-
-        col_back, col_next = st.columns([1, 2])
-        with col_back:
-            if st.button("← Back"):
+            if st.button("← Go back to questions"):
                 st.session_state.step = 1
                 st.rerun()
-        with col_next:
-            if st.button("Find Support Pathways →", type="primary"):
-                matched = match_pathways(profile, pathways)
-
-                spin_msg = (
-                    "Generating action plan with Claude…"
-                    if CLAUDE_AVAILABLE
-                    else "Generating action plan…"
-                )
-                with st.spinner(spin_msg):
-                    plan_text, plan_method = generate_action_plan(
-                        profile,
-                        matched,
-                        st.session_state.nfhs_rows,
-                        st.session_state.facilities_list,
-                    )
-
-                d = st.session_state.district_info
-                store.save_session(
-                    raw_text=st.session_state.raw_text,
-                    profile=profile,
-                    plan_text=plan_text,
-                    plan_method=plan_method,
-                    district_norm=d.get("district_norm", ""),
-                    state_norm=d.get("state_norm", ""),
-                )
-
-                st.session_state.matched_pathways = matched
-                st.session_state.action_plan = plan_text
-                st.session_state.plan_method = plan_method
-                st.session_state.step = 3
-                st.rerun()
-
-    # ── STEP 3: Results ─────────────────────────────────────────────────────
-    elif step == 3:
-        profile = st.session_state.profile
-        matched = st.session_state.matched_pathways
-        plan_text = st.session_state.action_plan
-        nfhs_rows = st.session_state.nfhs_rows
-        facilities = st.session_state.facilities_list
-        district_info = st.session_state.district_info
-
-        pin = profile.get("pincode", "?")
-        district = district_info.get("district_norm", "")
-        state = district_info.get("state_norm", "")
-        location_str = f"PIN {pin}" + (f" — {district}, {state}" if district else "")
-        st.subheader(f"Results for {location_str}")
-
-        # Followup context summary (urgency / travel / insurance)
-        _ctx_parts = []
-        if profile.get("urgency"):
-            _ctx_parts.append(f"Support type: **{profile['urgency']}**")
-        if profile.get("travel_km"):
-            _ctx_parts.append(f"Travel range: **{profile['travel_km']} km**")
-        if profile.get("uninsured") is True:
-            _ctx_parts.append("Insurance: **uninsured** — Insurance Awareness pathway included")
-        if _ctx_parts:
-            st.caption("  ·  ".join(_ctx_parts))
-
-        # Matched pathways
-        if matched:
-            st.write(f"**{len(matched)} support pathway(s) matched your profile:**")
-            for pw in matched:
-                with st.expander(
-                    pw.get("pathway_name", pw.get("pathway_id")),
-                    icon="✅",
-                ):
-                    st.write(pw.get("recommended_action", ""))
-                    st.caption(
-                        f"Category: {pw.get('category', '')}  ·  "
-                        f"Trigger: `{pw.get('trigger_condition', '')}`"
-                    )
         else:
+            final_profile = st.session_state.final_profile
+            matched = st.session_state.matched_pathways
+            plan_text = st.session_state.action_plan
+            nfhs_rows = st.session_state.nfhs_rows
+            facilities = st.session_state.facilities_list
+            district_info = st.session_state.district_info
+
+            pin = final_profile.get("pincode", "?")
+            district = district_info.get("district_norm", "")
+            state = district_info.get("state_norm", "")
+            location_str = f"PIN {pin}" + (f" — {district}, {state}" if district else "")
+            st.subheader(f"Results for {location_str}")
+
             st.info(
-                "No support pathways matched the current profile. "
-                "Please tick additional needs in the previous step, or consult a local health worker."
+                "Based on your original scenario and follow-up answers, "
+                "the app matched these support pathways."
             )
 
-        # Action plan
-        st.markdown("---")
-        method_label = "Claude AI" if st.session_state.plan_method == "claude" else "Deterministic rules"
-        st.subheader(f"Action Plan  ·  {method_label}")
-        st.markdown(plan_text)
+            # Matched pathways
+            if matched:
+                st.write(f"**{len(matched)} support pathway(s) matched your profile:**")
+                for pw in matched:
+                    with st.expander(
+                        pw.get("pathway_name", pw.get("pathway_id")),
+                        icon="✅",
+                    ):
+                        st.write(pw.get("recommended_action", ""))
+                        st.caption(
+                            f"Category: {pw.get('category', '')}  ·  "
+                            f"Trigger: `{pw.get('trigger_condition', '')}`"
+                        )
+            else:
+                st.info(
+                    "No support pathways matched the current profile. "
+                    "Please consult a local health worker for personalised guidance."
+                )
 
-        # NFHS district indicators
-        if nfhs_rows:
+            # Action plan
             st.markdown("---")
-            row = nfhs_rows[0]
-            d_name = row.get("district_name", "").strip() or district
-            match_type = "district match" if len(nfhs_rows) == 1 else "state-level context"
-            st.subheader(f"District Health Indicators — {d_name} ({match_type}, NFHS-5)")
+            method_label = "Claude AI" if st.session_state.plan_method == "claude" else "Deterministic rules"
+            st.subheader(f"Action Plan  ·  {method_label}")
+            st.markdown(plan_text)
 
-            indicators = get_nfhs_display_rows(row)
-            certain = [i for i in indicators if i["quality"] == "certain"]
-            uncertain = [i for i in indicators if i["quality"] in ("uncertain", "suppressed")]
+            # NFHS district indicators
+            if nfhs_rows:
+                st.markdown("---")
+                row = nfhs_rows[0]
+                d_name = row.get("district_name", "").strip() or district
+                match_type = "district match" if len(nfhs_rows) == 1 else "state-level context"
+                st.subheader(f"District Health Indicators — {d_name} ({match_type}, NFHS-5)")
 
-            if certain:
-                cols = st.columns(3)
-                for idx, ind in enumerate(certain[:12]):
-                    with cols[idx % 3]:
-                        st.metric(label=ind["label"], value=ind["value"])
+                indicators = get_nfhs_display_rows(row)
+                certain = [i for i in indicators if i["quality"] == "certain"]
+                uncertain = [i for i in indicators if i["quality"] in ("uncertain", "suppressed")]
 
-            if uncertain:
-                with st.expander("Indicators with data quality caveats"):
-                    for ind in uncertain:
-                        st.write(f"**{ind['label']}**: {ind['value']}")
+                if certain:
+                    cols = st.columns(3)
+                    for idx, ind in enumerate(certain[:12]):
+                        with cols[idx % 3]:
+                            st.metric(label=ind["label"], value=ind["value"])
 
-        # Nearby facilities
-        if facilities:
+                if uncertain:
+                    with st.expander("Indicators with data quality caveats"):
+                        for ind in uncertain:
+                            st.write(f"**{ind['label']}**: {ind['value']}")
+
+            # Nearby facilities
+            if facilities:
+                st.markdown("---")
+                _travel_ctx = final_profile.get("travel_km")
+                _fac_header = "Nearby Health Facilities"
+                if _travel_ctx:
+                    _fac_header += f" (within ~{_travel_ctx} km preference)"
+                st.subheader(_fac_header)
+                for f in facilities[:5]:
+                    fd = format_facility(f)
+                    _fac_label = fd["name"]
+                    if fd["address"]:
+                        _fac_label += f"  ·  {fd['address'][:60]}"
+                    with st.expander(_fac_label, icon="🏥"):
+                        if fd["phone"]:
+                            st.write(f"📞 {fd['phone']}")
+                        if fd["email"]:
+                            st.write(f"📧 {fd['email']}")
+                        if fd["specialties"]:
+                            st.write(f"Specialties: {fd['specialties']}")
+                        if fd["lat"] and fd["lon"]:
+                            st.caption(f"Coordinates: {fd['lat']:.4f}, {fd['lon']:.4f}")
+
             st.markdown("---")
-            st.subheader("Nearby Health Facilities")
-            for f in facilities[:5]:
-                fd = format_facility(f)
-                _fac_label = fd["name"]
-                if fd["address"]:
-                    _fac_label += f"  ·  {fd['address'][:60]}"
-                with st.expander(_fac_label, icon="🏥"):
-                    if fd["phone"]:
-                        st.write(f"📞 {fd['phone']}")
-                    if fd["email"]:
-                        st.write(f"📧 {fd['email']}")
-                    if fd["specialties"]:
-                        st.write(f"Specialties: {fd['specialties']}")
-                    if fd["lat"] and fd["lon"]:
-                        st.caption(f"Coordinates: {fd['lat']:.4f}, {fd['lon']:.4f}")
-
-        st.markdown("---")
-        if st.button("← Start a New Query"):
-            for key in list(_STATE_DEFAULTS.keys()):
-                st.session_state[key] = _STATE_DEFAULTS[key]
-            st.rerun()
+            if st.button("← Start a New Query"):
+                for key in list(_STATE_DEFAULTS.keys()):
+                    st.session_state[key] = _STATE_DEFAULTS[key]
+                st.rerun()
 
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 2 — PROGRAM LEADER DASHBOARD
@@ -455,7 +469,6 @@ with tab2:
                 else:
                     st.info("No numeric indicators available for this district.")
 
-                # Pathway demand simulation against sample scenarios
                 st.markdown("---")
                 st.markdown("#### Pathway Demand — Sample Scenario Simulation")
                 st.caption("Based on 3 included demo scenarios (not real population data)")
@@ -474,7 +487,6 @@ with tab2:
                     bar = "█" * count + "░" * (len(scenarios) - count)
                     st.write(f"**{name}**: {bar} {count}/{len(scenarios)}")
 
-        # Facility coverage overview
         st.markdown("---")
         st.markdown("#### Facility Coverage (sample_data)")
         all_facilities = _load("facilities")
@@ -526,6 +538,45 @@ with tab3:
         st.warning(
             "Deterministic mode — `ANTHROPIC_API_KEY` not set. "
             "Copy `.env.example` to `.env` and add your key to enable Claude."
+        )
+
+    # Profile lineage trace (current session)
+    st.markdown("---")
+    st.markdown("#### Profile Lineage Trace (current session)")
+    if st.session_state.get("base_profile"):
+        with st.expander("1. Original scenario (Screen 1)", expanded=False):
+            st.write(st.session_state.get("original_text") or "—")
+
+        with st.expander("2. Base profile extracted from Screen 1", expanded=False):
+            st.json(st.session_state.base_profile)
+
+        _fa = st.session_state.get("followup_answers") or {}
+        if _fa:
+            with st.expander("3. Follow-up answers (Screen 2)", expanded=False):
+                for _qid, _ans in _fa.items():
+                    st.write(f"**{_qid}:** {_ans or '—'}")
+
+        _fu = st.session_state.get("followup_updates") or {}
+        if _fu:
+            with st.expander("4. Follow-up updates (parsed from answers)", expanded=False):
+                st.json(_fu)
+
+        _fp = st.session_state.get("final_profile")
+        if _fp:
+            with st.expander("5. Final merged profile used for Screen 3", expanded=False):
+                st.json(_fp)
+
+        _mp = st.session_state.get("matched_pathways") or []
+        if _mp:
+            with st.expander("6. Matched pathways (generated from final_profile)", expanded=False):
+                for _pw in _mp:
+                    st.write(
+                        f"✅ **{_pw.get('pathway_name', _pw.get('pathway_id'))}**  "
+                        f"— trigger: `{_pw.get('trigger_condition', '')}`"
+                    )
+    else:
+        st.info(
+            "No session data yet. Complete a Family Navigator query to see the profile lineage."
         )
 
     # District matching trace

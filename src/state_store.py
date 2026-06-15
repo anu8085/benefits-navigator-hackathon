@@ -34,6 +34,10 @@ class StateStore:
     def _init_db(self) -> None:
         with self._connect() as conn:
             conn.executescript(_SCHEMA)
+            try:
+                conn.execute("ALTER TABLE sessions ADD COLUMN lineage_json TEXT")
+            except Exception:
+                pass  # column already exists
 
     def save_session(
         self,
@@ -43,14 +47,16 @@ class StateStore:
         plan_method: str,
         district_norm: str = "",
         state_norm: str = "",
+        lineage: dict | None = None,
     ) -> str:
         session_id = str(uuid.uuid4())
         now = datetime.utcnow().isoformat(timespec="seconds")
         with self._connect() as conn:
             conn.execute(
                 "INSERT INTO sessions "
-                "(id, created_at, raw_text, profile_json, plan_text, plan_method, district_norm, state_norm) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "(id, created_at, raw_text, profile_json, plan_text, plan_method, "
+                "district_norm, state_norm, lineage_json) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     session_id,
                     now,
@@ -60,6 +66,7 @@ class StateStore:
                     plan_method,
                     district_norm,
                     state_norm,
+                    json.dumps(lineage, default=str) if lineage else None,
                 ),
             )
         return session_id
