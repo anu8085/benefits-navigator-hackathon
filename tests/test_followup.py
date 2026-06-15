@@ -88,17 +88,47 @@ def test_insurance_in_raw_text_skips_insurance_question():
     profile = {"pincode": "560001"}
     raw = "I am uninsured and need help with maternal care."
     ids = [q["id"] for q in _deterministic_questions(profile, raw)]
-    assert "insurance" not in ids, f"Should skip insurance when already stated; got: {ids}"
+    assert "insurance" in ids, f"Should ask insurance when cost/coverage is relevant; got: {ids}"
 
 
 def test_insurance_placeholder_mentions_no_insurance():
     """The insurance question placeholder should mention 'no insurance'."""
     from src.followup import _deterministic_questions
     profile = {"pincode": "560001"}
-    questions = _deterministic_questions(profile, "")
+    questions = _deterministic_questions(profile, "I need affordable care.")
     ins_q = next((q for q in questions if q["id"] == "insurance"), None)
     assert ins_q is not None
     assert "no insurance" in ins_q["placeholder"].lower() or "low-cost" in ins_q["placeholder"].lower()
+
+
+VACCINATION_TEXT = (
+    "I have a 1-year-old baby in pincode 560001 and I want to make sure my child "
+    "gets all the required vaccinations. Where is the closest place I can take my "
+    "child for immunization?"
+)
+
+
+def test_vaccination_followup_questions_are_scenario_specific():
+    from src.followup import _deterministic_questions
+    from src.profile_extractor import _regex_extract
+
+    profile = _regex_extract(VACCINATION_TEXT)
+    questions = _deterministic_questions(profile, VACCINATION_TEXT)
+    text = " ".join(q["question"].lower() for q in questions)
+
+    assert "routine vaccination" in text
+    assert "missed or delayed" in text
+    assert "vaccination card" in text or "previous vaccine record" in text
+    assert "how far can you travel" in text
+
+
+def test_vaccination_followup_does_not_ask_insurance_without_cost_signal():
+    from src.followup import _deterministic_questions
+    from src.profile_extractor import _regex_extract
+
+    profile = _regex_extract(VACCINATION_TEXT)
+    questions = _deterministic_questions(profile, VACCINATION_TEXT)
+    assert "insurance" not in [q["id"] for q in questions]
 
 
 # ── generate_followup_questions (no API) ────────────────────────────────────

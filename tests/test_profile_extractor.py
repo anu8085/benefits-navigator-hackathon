@@ -33,6 +33,24 @@ def test_infant_age_months():
     assert p["child_age_months"] == 6
 
 
+def test_vaccination_scenario_profile_signals():
+    text = (
+        "I have a 1-year-old baby in pincode 560001 and I want to make sure my child "
+        "gets all the required vaccinations. Where is the closest place I can take my "
+        "child for immunization?"
+    )
+    p = _regex_extract(text)
+    assert p["pincode"] == "560001"
+    assert p["child_age_months"] == 12
+    assert p["child_under_5"] is True
+    assert p["immunization_need"] is True
+    assert p["facility_search"] is True
+    assert p["pregnant"] is False
+    assert p["nutrition_need"] is False
+    assert "child immunization" in p["needs"]
+    assert "nearby facility" in p["needs"]
+
+
 def test_age_years_converted():
     p = _regex_extract("I have a 2-year-old daughter.")
     assert p["child_under_5"] is True

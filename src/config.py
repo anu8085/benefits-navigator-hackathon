@@ -15,8 +15,13 @@ LOCAL_STATE_DIR.mkdir(exist_ok=True)
 SQLITE_PATH = LOCAL_STATE_DIR / "benefitbridge_local.db"
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-_DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-5-20250929"
-CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", _DEFAULT_CLAUDE_MODEL)
+DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-5-20250929"
+_DEFAULT_CLAUDE_MODEL = DEFAULT_CLAUDE_MODEL
+raw_model = os.getenv("CLAUDE_MODEL", DEFAULT_CLAUDE_MODEL).strip()
+if not raw_model or "opus" in raw_model.lower():
+    CLAUDE_MODEL = DEFAULT_CLAUDE_MODEL
+else:
+    CLAUDE_MODEL = raw_model
 CLAUDE_AVAILABLE = bool(ANTHROPIC_API_KEY)
 
 # Data source mode — controls the badge and (Gate B+) data fetching.

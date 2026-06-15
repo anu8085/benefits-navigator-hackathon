@@ -27,21 +27,26 @@ from src.data_loader import (
     load_pathways,
     load_scenarios,
 )
-from src.profile_extractor import extract_profile
+from src.profile_extractor import extract_profile_with_trace
 from src.followup import (
-    apply_followup_answers,
-    generate_followup_questions,
+    generate_followup_questions_with_trace,
     merge_profile,
     parse_followup_answers,
 )
 from src.rules_engine import _eval_condition, match_pathways
-from src.action_plan import generate_action_plan
+from src.action_plan import generate_action_plan_with_trace
+from src.agent_trace import empty_agent_trace, rules_engine_trace, step_display_label
 from src.state_store import StateStore
 from src.ui_helpers import (
     ai_mode_label,
     data_source_label,
+    district_context_rows,
     format_facility,
     get_nfhs_display_rows,
+    limited_facilities,
+    next_steps_for_profile,
+    pathway_reason,
+    plan_method_label,
     preferred_district_index,
     state_store_label,
 )
@@ -66,9 +71,12 @@ _STATE_DEFAULTS: dict = {
     "matched_pathways": [],
     "action_plan": "",
     "plan_method": "",
+    "agent_trace": empty_agent_trace(),
     "nfhs_rows": [],
     "facilities_list": [],
     "district_info": {},
+    "session_id": None,
+    "feedback_submitted": False,
 }
 for _k, _v in _STATE_DEFAULTS.items():
     if _k not in st.session_state:
@@ -127,7 +135,7 @@ with tab1:
                 else "Extracting profile…"
             )
             with st.spinner(spinner_msg):
-                base_profile = extract_profile(raw.strip())
+                base_profile, profile_trace = extract_profile_with_trace(raw.strip())
 
                 pincode = base_profile.get("pincode") or ""
                 district_info: dict = {}
@@ -146,10 +154,18 @@ with tab1:
                             pincode, district_info["district_norm"], district_info["state_norm"]
                         )
 
-                followup_qs = generate_followup_questions(base_profile, raw.strip())
+                followup_qs, followup_trace = generate_followup_questions_with_trace(
+                    base_profile, raw.strip()
+                )
 
             st.session_state.original_text = raw.strip()
             st.session_state.base_profile = base_profile
+            st.session_state.agent_trace = {
+                "profile_extraction": profile_trace,
+                "followup_questions": followup_trace,
+                "action_plan": empty_agent_trace()["action_plan"],
+                "rules_engine": rules_engine_trace(),
+            }
             st.session_state.district_info = district_info
             st.session_state.nfhs_rows = nfhs_rows
             st.session_state.facilities_list = facilities
@@ -280,16 +296,19 @@ with tab1:
                 else "Generating your support plan…"
             )
             with st.spinner(spin_msg):
-                plan_text, plan_method = generate_action_plan(
+                plan_text, plan_method, action_trace = generate_action_plan_with_trace(
                     final_profile,
                     matched,
                     st.session_state.nfhs_rows,
                     st.session_state.facilities_list,
                 )
+            agent_trace = dict(st.session_state.get("agent_trace") or empty_agent_trace())
+            agent_trace["action_plan"] = action_trace
+            agent_trace["rules_engine"] = rules_engine_trace()
 
             # 6 — Persist to SQLite with full lineage
             _d = st.session_state.district_info
-            store.save_session(
+            session_id = store.save_session(
                 raw_text=st.session_state.original_text,
                 profile=final_profile,
                 plan_text=plan_text,
@@ -300,6 +319,7 @@ with tab1:
                     "base_profile": base_profile,
                     "followup_answers": form_answers,
                     "followup_updates": followup_updates,
+                    "agent_trace": agent_trace,
                     "matched_pathway_ids": [pw.get("pathway_id") for pw in matched],
                     "facilities_count": len(st.session_state.facilities_list),
                 },
@@ -312,6 +332,9 @@ with tab1:
             st.session_state.matched_pathways = matched
             st.session_state.action_plan = plan_text
             st.session_state.plan_method = plan_method
+            st.session_state.agent_trace = agent_trace
+            st.session_state.session_id = session_id
+            st.session_state.feedback_submitted = False
             st.session_state.step = 2
             st.rerun()
 
@@ -327,7 +350,7 @@ with tab1:
                 "Please complete the follow-up questions first. "
                 "The results screen requires a completed profile."
             )
-            if st.button("← Go back to questions"):
+            if st.button("Back to questions"):
                 st.session_state.step = 1
                 st.rerun()
         else:
@@ -341,7 +364,7 @@ with tab1:
             pin = final_profile.get("pincode", "?")
             district = district_info.get("district_norm", "")
             state = district_info.get("state_norm", "")
-            location_str = f"PIN {pin}" + (f" — {district}, {state}" if district else "")
+            location_str = f"PIN {pin}" + (f" - {district}, {state}" if district else "")
             st.subheader(f"Results for {location_str}")
 
             st.info(
@@ -349,17 +372,15 @@ with tab1:
                 "the app matched these support pathways."
             )
 
-            # Matched pathways
+            st.markdown("### Matched Support Pathways")
             if matched:
-                st.write(f"**{len(matched)} support pathway(s) matched your profile:**")
                 for pw in matched:
-                    with st.expander(
-                        pw.get("pathway_name", pw.get("pathway_id")),
-                        icon="✅",
-                    ):
+                    with st.container(border=True):
+                        st.markdown(f"**{pw.get('pathway_name', pw.get('pathway_id'))}**")
                         st.write(pw.get("recommended_action", ""))
+                        st.write(f"**Reason:** {pathway_reason(final_profile, pw)}")
                         st.caption(
-                            f"Category: {pw.get('category', '')}  ·  "
+                            f"Category: {pw.get('category', '')}  |  "
                             f"Trigger: `{pw.get('trigger_condition', '')}`"
                         )
             else:
@@ -368,64 +389,101 @@ with tab1:
                     "Please consult a local health worker for personalised guidance."
                 )
 
-            # Action plan
             st.markdown("---")
-            method_label = "Claude AI" if st.session_state.plan_method == "claude" else "Deterministic rules"
-            st.subheader(f"Action Plan  ·  {method_label}")
+            method_label = plan_method_label(st.session_state.plan_method)
+            st.subheader(f"Personalized Action Plan  |  {method_label}")
             st.markdown(plan_text)
 
-            # NFHS district indicators
+            st.markdown("---")
+            st.subheader("Next Steps")
+            for step_text in next_steps_for_profile(final_profile):
+                st.write(f"- {step_text}")
+
+            if facilities:
+                st.markdown("---")
+                st.subheader("Nearby Health Facilities")
+                st.caption("Showing up to 5 facilities based on your location and travel preference.")
+                for f in limited_facilities(facilities):
+                    fd = format_facility(f)
+                    with st.container(border=True):
+                        st.markdown(f"**{fd['name']}**")
+                        if fd["address"]:
+                            st.write(fd["address"])
+                        if fd["phone"]:
+                            st.write(f"Phone: {fd['phone']}")
+                        if fd["email"]:
+                            st.write(f"Email: {fd['email']}")
+                        if fd["service_tags"]:
+                            st.write("Services: " + ", ".join(fd["service_tags"][:3]))
+                        city_state = ", ".join(
+                            x for x in [
+                                f.get("address_city", ""),
+                                f.get("address_stateOrRegion", ""),
+                            ] if x
+                        )
+                        if city_state:
+                            st.caption(city_state)
+                        with st.expander("View data details"):
+                            st.caption("Sample facility data. Verify availability before visiting.")
+                            if f.get("source"):
+                                st.write(f"Source: {f.get('source')}")
+                            if f.get("source_content_id"):
+                                st.write(f"Source content ID: {f.get('source_content_id')}")
+                            if fd["lat"] and fd["lon"]:
+                                st.write(f"Coordinates: {fd['lat']:.4f}, {fd['lon']:.4f}")
+
             if nfhs_rows:
                 st.markdown("---")
                 row = nfhs_rows[0]
                 d_name = row.get("district_name", "").strip() or district
                 match_type = "district match" if len(nfhs_rows) == 1 else "state-level context"
-                st.subheader(f"District Health Indicators — {d_name} ({match_type}, NFHS-5)")
-
-                indicators = get_nfhs_display_rows(row)
-                certain = [i for i in indicators if i["quality"] == "certain"]
-                uncertain = [i for i in indicators if i["quality"] in ("uncertain", "suppressed")]
-
-                if certain:
-                    cols = st.columns(3)
-                    for idx, ind in enumerate(certain[:12]):
-                        with cols[idx % 3]:
-                            st.metric(label=ind["label"], value=ind["value"])
-
-                if uncertain:
-                    with st.expander("Indicators with data quality caveats"):
-                        for ind in uncertain:
-                            st.write(f"**{ind['label']}**: {ind['value']}")
-
-            # Nearby facilities
-            if facilities:
                 st.markdown("---")
-                _travel_ctx = final_profile.get("travel_km")
-                _fac_header = "Nearby Health Facilities"
-                if _travel_ctx:
-                    _fac_header += f" (within ~{_travel_ctx} km preference)"
-                st.subheader(_fac_header)
-                for f in facilities[:5]:
-                    fd = format_facility(f)
-                    _fac_label = fd["name"]
-                    if fd["address"]:
-                        _fac_label += f"  ·  {fd['address'][:60]}"
-                    with st.expander(_fac_label, icon="🏥"):
-                        if fd["phone"]:
-                            st.write(f"📞 {fd['phone']}")
-                        if fd["email"]:
-                            st.write(f"📧 {fd['email']}")
-                        if fd["specialties"]:
-                            st.write(f"Specialties: {fd['specialties']}")
-                        if fd["lat"] and fd["lon"]:
-                            st.caption(f"Coordinates: {fd['lat']:.4f}, {fd['lon']:.4f}")
+                st.subheader(f"Relevant District Health Context")
+                st.caption(f"{d_name} ({match_type}, NFHS-5)")
+                selected_indicators, more_indicators = district_context_rows(final_profile, row)
+                cols = st.columns(3)
+                for idx, ind in enumerate(selected_indicators):
+                    with cols[idx % 3]:
+                        st.metric(label=ind["label"], value=ind["value"])
+                        if ind["quality"] != "certain":
+                            st.caption(f"Data quality: {ind['quality']}")
+
+                with st.expander("View more district indicators"):
+                    for ind in more_indicators:
+                        st.write(f"**{ind['label']}**: {ind['value']}")
+                        if ind["quality"] != "certain":
+                            st.caption(f"Data quality: {ind['quality']}")
 
             st.markdown("---")
-            if st.button("← Start a New Query"):
+            st.subheader("How helpful was this plan?")
+            if st.session_state.feedback_submitted:
+                st.success("Thanks — your feedback was saved.")
+            else:
+                with st.form("screen3_feedback"):
+                    rating = st.radio(
+                        "Choose one:",
+                        ["Helpful", "Somewhat helpful", "Not helpful"],
+                        horizontal=True,
+                    )
+                    comment = st.text_area(
+                        "What would make this plan more useful?",
+                        height=90,
+                    )
+                    submitted_feedback = st.form_submit_button("Submit feedback")
+                if submitted_feedback:
+                    store.save_feedback(
+                        st.session_state.get("session_id"),
+                        rating,
+                        comment.strip(),
+                    )
+                    st.session_state.feedback_submitted = True
+                    st.rerun()
+
+            st.markdown("---")
+            if st.button("Start a New Query"):
                 for key in list(_STATE_DEFAULTS.keys()):
                     st.session_state[key] = _STATE_DEFAULTS[key]
                 st.rerun()
-
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 2 — PROGRAM LEADER DASHBOARD
 # ════════════════════════════════════════════════════════════════════════════
@@ -540,6 +598,24 @@ with tab3:
             "Copy `.env.example` to `.env` and add your key to enable Claude."
         )
 
+    st.markdown("#### Claude Agent Trace")
+    agent_trace = st.session_state.get("agent_trace") or empty_agent_trace()
+    trace_rows = [
+        ("Profile extraction", "profile_extraction", False),
+        ("Follow-up questions", "followup_questions", False),
+        ("Action plan", "action_plan", False),
+        ("Rules engine", "rules_engine", True),
+    ]
+    for label, key, is_rules_engine in trace_rows:
+        step_trace = agent_trace.get(key, {})
+        model = step_trace.get("model") or "None"
+        st.write(
+            f"**{label}:** {step_display_label(step_trace, rules_engine=is_rules_engine)} "
+            f" | Model: `{model}`"
+        )
+        if step_trace.get("fallback_used") and step_trace.get("fallback_reason"):
+            st.caption(f"Fallback reason: {step_trace['fallback_reason']}")
+
     # Profile lineage trace (current session)
     st.markdown("---")
     st.markdown("#### Profile Lineage Trace (current session)")
@@ -548,27 +624,35 @@ with tab3:
             st.write(st.session_state.get("original_text") or "—")
 
         with st.expander("2. Base profile extracted from Screen 1", expanded=False):
+            st.write("**Needs detected:**")
+            st.write(", ".join(st.session_state.base_profile.get("needs") or []) or "—")
             st.json(st.session_state.base_profile)
+
+        _fq = st.session_state.get("followup_questions") or []
+        if _fq:
+            with st.expander("3. Generated follow-up questions", expanded=False):
+                for _q in _fq:
+                    st.write(f"**{_q.get('id', 'question')}:** {_q.get('question', '')}")
 
         _fa = st.session_state.get("followup_answers") or {}
         if _fa:
-            with st.expander("3. Follow-up answers (Screen 2)", expanded=False):
+            with st.expander("4. Follow-up answers (Screen 2)", expanded=False):
                 for _qid, _ans in _fa.items():
                     st.write(f"**{_qid}:** {_ans or '—'}")
 
         _fu = st.session_state.get("followup_updates") or {}
         if _fu:
-            with st.expander("4. Follow-up updates (parsed from answers)", expanded=False):
+            with st.expander("5. Follow-up updates (parsed from answers)", expanded=False):
                 st.json(_fu)
 
         _fp = st.session_state.get("final_profile")
         if _fp:
-            with st.expander("5. Final merged profile used for Screen 3", expanded=False):
+            with st.expander("6. Final merged profile used for Screen 3", expanded=False):
                 st.json(_fp)
 
         _mp = st.session_state.get("matched_pathways") or []
         if _mp:
-            with st.expander("6. Matched pathways (generated from final_profile)", expanded=False):
+            with st.expander("7. Matched pathways (generated from final_profile)", expanded=False):
                 for _pw in _mp:
                     st.write(
                         f"✅ **{_pw.get('pathway_name', _pw.get('pathway_id'))}**  "

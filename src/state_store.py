@@ -18,6 +18,14 @@ CREATE TABLE IF NOT EXISTS sessions (
     district_norm TEXT,
     state_norm    TEXT
 );
+
+CREATE TABLE IF NOT EXISTS feedback (
+    id            TEXT PRIMARY KEY,
+    session_id    TEXT,
+    created_at    TEXT NOT NULL,
+    rating        TEXT NOT NULL,
+    comment       TEXT
+);
 """
 
 
@@ -84,3 +92,26 @@ class StateStore:
                 "SELECT * FROM sessions WHERE id = ?", (session_id,)
             ).fetchone()
         return dict(row) if row else None
+
+    def save_feedback(
+        self,
+        session_id: str | None,
+        rating: str,
+        comment: str = "",
+    ) -> str:
+        feedback_id = str(uuid.uuid4())
+        now = datetime.utcnow().isoformat(timespec="seconds")
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT INTO feedback (id, session_id, created_at, rating, comment) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (feedback_id, session_id, now, rating, comment),
+            )
+        return feedback_id
+
+    def get_recent_feedback(self, limit: int = 20) -> list[dict]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM feedback ORDER BY created_at DESC LIMIT ?", (limit,)
+            ).fetchall()
+        return [dict(r) for r in rows]

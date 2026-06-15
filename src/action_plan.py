@@ -6,11 +6,12 @@ _PLAN_SYSTEM = """\
 You are a health benefits navigator AI for families in India.
 Generate a concise, actionable benefit enrollment plan in plain English (max 400 words).
 Structure it as numbered steps the family can take TODAY.
-Reference the matched support pathways and nearby facilities by name.
+Refer to the Nearby Health Facilities section below instead of listing facility names.
 Use language simple enough for a community health worker to read aloud.
 
 GROUNDING RULES — follow strictly:
 - Use ONLY the support pathways and facility information explicitly provided in this prompt.
+- Do NOT include a "Nearest Health Facilities" section or list facility names in the plan.
 - Do NOT name specific government schemes (Ayushman Bharat, ICDS, PM Matru Vandana Yojana,
   Janani Suraksha Yojana, PMMVY, or any other) unless the pathway text below explicitly names them.
 - Do NOT promise free food, free medicines, or free services unless the pathway text says so.
@@ -44,34 +45,37 @@ def _deterministic_plan(
             "Primary Health Centre (PHC) for personalised guidance."
         )
 
-    lines = ["**Your Personalised Action Plan**\n"]
-    for i, pw in enumerate(matched_pathways, 1):
-        name = pw.get("pathway_name", pw.get("pathway_id", ""))
-        action = pw.get("recommended_action", "Visit your nearest health centre.").strip()
-        if not action.endswith("."):
-            action += "."
-        # Bold title on its own line; blank line before recommendation creates
-        # a proper markdown paragraph break for readability.
-        lines.append(f"**Step {i}: {name}**")
-        lines.append("")
-        lines.append(action)
-        lines.append("")
+    ids = {pw.get("pathway_id", "") for pw in matched_pathways}
+    if "immunization" in ids or profile.get("immunization_need"):
+        return "\n".join([
+            "**Step 1 - Confirm vaccination need**",
+            "",
+            "Review your child's vaccination card or previous vaccine record.",
+            "",
+            "**Step 2 - Contact a nearby child-health facility**",
+            "",
+            "Use the nearby facilities listed below and call the first available facility.",
+            "",
+            "**Step 3 - Ask these questions**",
+            "",
+            "- Which vaccines are due for a 1-year-old child?",
+            "- Do I need to bring my child's vaccination card?",
+            "- Can I come today or should I book an appointment?",
+        ])
 
-    if facilities:
-        lines.append("---")
-        lines.append("**Nearest Health Facilities:**\n")
-        for f in facilities[:3]:
-            fname = f.get("name", "Unnamed facility")
-            city = f.get("address_city", "")
-            phone = f.get("officialPhone") or ""
-            entry = f"- **{fname}**"
-            if city:
-                entry += f", {city}"
-            if phone:
-                entry += f"  ·  {phone}"
-            lines.append(entry)
-
-    return "\n".join(lines)
+    return "\n".join([
+        "**Step 1 - Review the matched support pathways**",
+        "",
+        "Use the support pathways above to understand which kind of help is most relevant.",
+        "",
+        "**Step 2 - Contact a nearby facility**",
+        "",
+        "Use the nearby facilities listed below and ask which services are available today.",
+        "",
+        "**Step 3 - Bring available records**",
+        "",
+        "Bring any pregnancy, child health, vaccination, or referral records you already have.",
+    ])
 
 
 def generate_action_plan(
@@ -80,7 +84,26 @@ def generate_action_plan(
     nfhs_rows: list[dict],
     facilities: list[dict],
 ) -> tuple[str, str]:
-    """Return (plan_text, method) — method is 'claude' or 'deterministic'."""
+    """Return (plan_text, method), where method is 'claude' or 'deterministic'."""
+    plan_text, method, _trace = generate_action_plan_with_trace(
+        profile, matched_pathways, nfhs_rows, facilities
+    )
+    return plan_text, method
+
+
+def generate_action_plan_with_trace(
+    profile: dict,
+    matched_pathways: list[dict],
+    nfhs_rows: list[dict],
+    facilities: list[dict],
+) -> tuple[str, str, dict]:
+    """Return (plan_text, method, trace)."""
+    trace = {
+        "provider": "deterministic",
+        "model": None,
+        "fallback_used": False,
+        "fallback_reason": None,
+    }
     if CLAUDE_AVAILABLE:
         try:
             import anthropic
@@ -106,10 +129,11 @@ def generate_action_plan(
                     if v and v not in ("NA", "*", "nan", ""):
                         nfhs_lines += f"  {label}: {v}%\n"
 
-            fac_lines = "".join(
-                f"- {f.get('name','?')}, {f.get('address_city','')} | {f.get('officialPhone','')}\n"
-                for f in facilities[:3]
-            ) or "No facilities in local dataset\n"
+            fac_lines = (
+                f"{min(len(facilities), 5)} nearby facilities are listed separately below.\n"
+                if facilities
+                else "No facilities in local dataset\n"
+            )
 
             user_msg = (
                 f"Family location: {location}\n"
@@ -120,7 +144,7 @@ def generate_action_plan(
                 f"uninsured={profile.get('uninsured')}\n\n"
                 f"Matched support pathways:\n{pathway_lines}\n"
                 f"District health context (NFHS-5):\n{nfhs_lines or 'No data available'}\n"
-                f"Nearby facilities:\n{fac_lines}\n"
+                f"Nearby facility section:\n{fac_lines}\n"
                 "Generate a numbered action plan for this family."
             )
 
@@ -139,8 +163,30 @@ def generate_action_plan(
                     plan_text += block.text
 
             if plan_text.strip():
-                return plan_text.strip(), "claude"
-        except Exception:
-            pass
+                trace.update({
+                    "provider": "claude",
+                    "model": CLAUDE_MODEL,
+                    "fallback_used": False,
+                    "fallback_reason": None,
+                })
+                return plan_text.strip(), "claude", trace
+            raise ValueError("empty Claude response")
+        except Exception as exc:
+            trace.update({
+                "provider": "deterministic",
+                "model": None,
+                "fallback_used": True,
+                "fallback_reason": f"Claude action plan generation failed: {type(exc).__name__}",
+            })
+            return (
+                _deterministic_plan(profile, matched_pathways, nfhs_rows, facilities),
+                "deterministic",
+                trace,
+            )
 
-    return _deterministic_plan(profile, matched_pathways, nfhs_rows, facilities), "deterministic"
+    trace["fallback_reason"] = "ANTHROPIC_API_KEY not set"
+    return (
+        _deterministic_plan(profile, matched_pathways, nfhs_rows, facilities),
+        "deterministic",
+        trace,
+    )

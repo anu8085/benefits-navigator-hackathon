@@ -4,6 +4,7 @@ import json
 import re
 
 from .config import ANTHROPIC_API_KEY, CLAUDE_MODEL, CLAUDE_AVAILABLE
+from .agent_trace import deterministic_trace
 
 _FOLLOWUP_SYSTEM = """\
 You are a benefits navigator assistant for families in India.
@@ -71,6 +72,10 @@ _AFFORDABILITY_SIGNALS = (
     "free care",
     "free services",
     "cost",
+    "insurance",
+    "uninsured",
+    "coverage",
+    "covered",
 )
 
 # Routine signals — checked first because they are more specific
@@ -101,55 +106,101 @@ _URGENT_SIGNALS = (
 # ── Question generation ───────────────────────────────────────────────────────
 
 def _deterministic_questions(profile: dict, raw_text: str = "") -> list[dict]:
-    """Return 2-3 deterministic text-input follow-up questions based on what is missing."""
+    """Return 2-3 deterministic text-input follow-up questions based on scenario signals."""
     questions: list[dict] = []
     raw_lower = (raw_text or "").lower()
 
+    def add(qid: str, question: str, placeholder: str) -> None:
+        if len(questions) >= 3:
+            return
+        if any(q["id"] == qid for q in questions):
+            return
+        questions.append({
+            "id": qid,
+            "question": question,
+            "type": "text",
+            "options": [],
+            "placeholder": placeholder,
+        })
+
     if not profile.get("pincode"):
-        questions.append({
-            "id": "pincode",
-            "question": "What is your pincode or nearest town/district?",
-            "type": "text",
-            "options": [],
-            "placeholder": "E.g. 560001 or Bangalore area",
-        })
+        add("pincode", "What is your PIN code or district?", "E.g. 560001 or Bangalore area")
 
-    insurance_clear = any(
-        kw in raw_lower
-        for kw in ("insur", "uninsured", "no coverage", "have coverage")
-    )
-    if not insurance_clear and len(questions) < 3:
-        questions.append({
-            "id": "insurance",
-            "question": "Tell us about your current health insurance or cost situation.",
-            "type": "text",
-            "options": [],
-            "placeholder": "I do not have insurance and need low-cost care.",
-        })
+    if profile.get("immunization_need"):
+        add(
+            "immunization_timing",
+            "Is this a routine vaccination visit, or do you think a vaccine dose was missed or delayed?",
+            "Routine visit, or one dose may be delayed.",
+        )
+        add(
+            "vaccination_record",
+            "Do you have the child's vaccination card or previous vaccine record?",
+            "Yes, I have the card, or no, I do not have it.",
+        )
 
-    if profile.get("pincode") and len(questions) < 3:
-        questions.append({
-            "id": "travel_distance",
-            "question": "How far can you travel to reach a health facility?",
-            "type": "text",
-            "options": [],
-            "placeholder": "Up to 5 km.",
-        })
+    if profile.get("pregnant"):
+        add(
+            "urgency",
+            "Is this urgent today, or are you planning ahead?",
+            "It is urgent today, or I am planning ahead.",
+        )
+        add(
+            "travel_distance",
+            "How far can you travel for a pregnancy or maternal health facility?",
+            "Up to 5 km.",
+        )
 
-    if len(questions) < 3:
-        questions.append({
-            "id": "urgency",
-            "question": "Is this urgent today, or are you planning ahead?",
-            "type": "text",
-            "options": [],
-            "placeholder": "It is urgent today, but not an emergency.",
-        })
+    affordability_mentioned = any(kw in raw_lower for kw in _AFFORDABILITY_SIGNALS)
+    if affordability_mentioned:
+        add(
+            "insurance",
+            "Tell us about your current health insurance or cost situation.",
+            "I do not have insurance and need low-cost care.",
+        )
+
+    if profile.get("facility_search"):
+        add(
+            "travel_distance",
+            "How far can you travel for a health facility?",
+            "Up to 5 km.",
+        )
+
+    if profile.get("nutrition_need"):
+        add(
+            "nutrition_support_type",
+            "Is this for growth monitoring, feeding support, or general nutrition advice?",
+            "Growth monitoring and feeding support.",
+        )
+
+    if len(questions) < 2:
+        add(
+            "urgency",
+            "Is this urgent today, or are you planning ahead?",
+            "It is urgent today, but not an emergency.",
+        )
+    if len(questions) < 2 and profile.get("pincode"):
+        add(
+            "travel_distance",
+            "How far can you travel for a health facility?",
+            "Up to 5 km.",
+        )
 
     return questions[:3]
 
 
 def generate_followup_questions(profile: dict, raw_text: str = "") -> list[dict]:
-    """Return 2-3 text-input follow-up question dicts. Claude-first, deterministic fallback."""
+    """Return 2-3 scenario-specific text-input follow-up question dicts."""
+    questions, _trace = generate_followup_questions_with_trace(profile, raw_text)
+    return questions
+
+
+def generate_followup_questions_with_trace(profile: dict, raw_text: str = "") -> tuple[list[dict], dict]:
+    """Return scenario-specific follow-up questions and agent trace metadata."""
+    return _deterministic_questions(profile, raw_text), deterministic_trace()
+
+
+def _generate_followup_questions_with_claude(profile: dict, raw_text: str = "") -> list[dict]:
+    """Claude-backed follow-up generation kept available but not used for Gate A."""
     if CLAUDE_AVAILABLE:
         try:
             import anthropic

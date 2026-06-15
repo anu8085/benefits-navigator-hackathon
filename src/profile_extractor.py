@@ -26,13 +26,15 @@ Use exactly these fields:
   "child_diarrhea_risk": false,
   "adult_woman": false,
   "screening_need": false,
+  "immunization_need": false,
+  "facility_search": false,
   "needs": []
 }
 Rules:
 - adult_woman: true whenever person is female (including pregnant/recently-delivered mothers)
 - child_age_months: integer months (convert: 1 year = 12 months); null if not mentioned
 - child_under_5: true if any child under 60 months / 5 years mentioned
-- needs: subset of ["maternal_care","child_nutrition","immunization","health_insurance","sanitation","screening","facility"]
+- needs: subset of ["maternal_care","child_nutrition","child immunization","health_insurance","sanitation","screening","nearby facility"]
 """
 
 
@@ -50,6 +52,8 @@ def _default_profile(raw_text: str) -> dict:
         "child_diarrhea_risk": False,
         "adult_woman": False,
         "screening_need": False,
+        "immunization_need": False,
+        "facility_search": False,
         "needs": [],
         "raw_text": raw_text,
         "extraction_method": "default",
@@ -84,6 +88,15 @@ def _regex_extract(text: str) -> dict:
     profile["screening_need"] = bool(
         re.search(r'\b(screening|cervical|breast exam|cancer check)\b', t)
     )
+    profile["immunization_need"] = bool(
+        re.search(r'\b(vaccin(?:e|es|ation|ations)?|immuni[sz](?:e|ation|ations)?|dose|doses)\b', t)
+    )
+    profile["facility_search"] = bool(
+        re.search(
+            r'\b(closest|nearby|nearest|where (?:can|should)|place|facility|hospital|clinic|doctor|health.?cent(?:er|re))\b',
+            t,
+        )
+    )
 
     # Derive child age in months (month mention takes priority over year)
     age_months: int | None = None
@@ -115,12 +128,14 @@ def _regex_extract(text: str) -> dict:
         needs.append("maternal_care")
     if profile["child_under_5"] and profile["nutrition_need"]:
         needs.append("child_nutrition")
+    if profile["immunization_need"]:
+        needs.append("child immunization")
     if profile["uninsured"] or profile["low_income"]:
         needs.append("health_insurance")
     if profile["water_sanitation_need"]:
         needs.append("sanitation")
-    if re.search(r'\b(facility|hospital|clinic|doctor|health.?cent(er|re))\b', t):
-        needs.append("facility")
+    if profile["facility_search"]:
+        needs.append("nearby facility")
     profile["needs"] = list(dict.fromkeys(needs))
 
     return profile
@@ -128,8 +143,21 @@ def _regex_extract(text: str) -> dict:
 
 def extract_profile(text: str) -> dict:
     """Extract family profile from free text. Uses Claude if available, else regex."""
+    profile, _trace = extract_profile_with_trace(text)
+    return profile
+
+
+def extract_profile_with_trace(text: str) -> tuple[dict, dict]:
+    """Extract family profile and return agent trace metadata."""
+    trace = {
+        "provider": "deterministic",
+        "model": None,
+        "fallback_used": False,
+        "fallback_reason": None,
+    }
     if not text.strip():
-        return _default_profile(text)
+        trace["fallback_reason"] = "empty input"
+        return _default_profile(text), trace
 
     if CLAUDE_AVAILABLE:
         try:
@@ -163,8 +191,37 @@ def extract_profile(text: str) -> dict:
                 # Guarantee adult_woman inference
                 if parsed.get("pregnant") or parsed.get("recently_delivered"):
                     parsed["adult_woman"] = True
-                return parsed
-        except Exception:
-            pass  # fall through to regex
+                parsed = _enrich_profile_signals(parsed, text)
+                trace.update({
+                    "provider": "claude",
+                    "model": CLAUDE_MODEL,
+                    "fallback_used": False,
+                    "fallback_reason": None,
+                })
+                return parsed, trace
+        except Exception as exc:
+            trace.update({
+                "provider": "deterministic",
+                "model": None,
+                "fallback_used": True,
+                "fallback_reason": f"Claude profile extraction failed: {type(exc).__name__}",
+            })
+            return _regex_extract(text), trace
 
-    return _regex_extract(text)
+    trace["fallback_reason"] = "ANTHROPIC_API_KEY not set"
+    return _regex_extract(text), trace
+
+
+def _enrich_profile_signals(profile: dict, text: str) -> dict:
+    """Fill deterministic signal fields that Claude may omit."""
+    regex_profile = _regex_extract(text)
+    for key in ("immunization_need", "facility_search"):
+        if key not in profile or profile.get(key) in (None, False):
+            profile[key] = regex_profile.get(key, False)
+
+    needs = list(profile.get("needs") or [])
+    for need in regex_profile.get("needs", []):
+        if need not in needs:
+            needs.append(need)
+    profile["needs"] = needs
+    return profile

@@ -102,6 +102,26 @@ def test_immunization_matches_under_3():
     assert any(pw["pathway_id"] == "immunization" for pw in matched)
 
 
+def test_vaccination_scenario_matches_immunization_not_insurance():
+    profile = {
+        "pincode": "560001",
+        "pregnant": False,
+        "recently_delivered": False,
+        "child_under_5": True,
+        "child_age_months": 12,
+        "immunization_need": True,
+        "facility_search": True,
+        "nutrition_need": False,
+        "uninsured": False,
+        "low_income": False,
+        "adult_woman": False,
+    }
+    matched = match_pathways(profile, load_pathways())
+    ids = {pw["pathway_id"] for pw in matched}
+    assert "immunization" in ids
+    assert "health_insurance_awareness" not in ids
+
+
 def test_active_flag_false_skips_pathway():
     profile = {"pregnant": True}
     pathways = [

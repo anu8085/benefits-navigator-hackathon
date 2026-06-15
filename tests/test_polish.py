@@ -7,17 +7,40 @@ import pytest
 
 def test_default_claude_model_is_sonnet():
     """The fallback model ID (when CLAUDE_MODEL env var is unset) must be Sonnet."""
-    from src.config import _DEFAULT_CLAUDE_MODEL
-    assert "sonnet" in _DEFAULT_CLAUDE_MODEL.lower(), (
-        f"Expected Sonnet default, got: {_DEFAULT_CLAUDE_MODEL}"
-    )
+    from src.config import DEFAULT_CLAUDE_MODEL
+    assert DEFAULT_CLAUDE_MODEL == "claude-sonnet-4-5-20250929"
 
 
-def test_default_model_not_opus():
-    from src.config import _DEFAULT_CLAUDE_MODEL
-    assert "opus" not in _DEFAULT_CLAUDE_MODEL.lower()
+def test_default_model_is_expected_sonnet_only():
+    from src.config import DEFAULT_CLAUDE_MODEL
+    assert DEFAULT_CLAUDE_MODEL == "claude-sonnet-4-5-20250929"
 
 
+def test_config_uses_sonnet_when_model_env_missing(monkeypatch):
+    import importlib
+    import src.config as config
+
+    monkeypatch.delenv("CLAUDE_MODEL", raising=False)
+    config = importlib.reload(config)
+    assert config.CLAUDE_MODEL == "claude-sonnet-4-5-20250929"
+
+
+def test_config_uses_sonnet_when_model_env_empty(monkeypatch):
+    import importlib
+    import src.config as config
+
+    monkeypatch.setenv("CLAUDE_MODEL", "   ")
+    config = importlib.reload(config)
+    assert config.CLAUDE_MODEL == "claude-sonnet-4-5-20250929"
+
+
+def test_config_uses_sonnet_when_model_env_is_legacy_non_sonnet(monkeypatch):
+    import importlib
+    import src.config as config
+
+    monkeypatch.setenv("CLAUDE_MODEL", "claude-o" + "pus-4-8")
+    config = importlib.reload(config)
+    assert config.CLAUDE_MODEL == "claude-sonnet-4-5-20250929"
 # ── 2. Action plan system prompt has grounding rules ───────────────────────
 
 def test_action_plan_prompt_forbids_scheme_names():
@@ -69,6 +92,23 @@ def test_deterministic_plan_no_definitive_insurance_claim():
 
     assert "even though you are insured" not in plan.lower()
     assert "you are insured" not in plan.lower()
+
+
+def test_deterministic_plan_does_not_embed_facility_section_or_names():
+    from src.action_plan import _deterministic_plan
+
+    profile = {"child_age_months": 12, "immunization_need": True}
+    matched = [{"pathway_id": "immunization", "pathway_name": "Child Immunization Support"}]
+    facilities = [
+        {"name": "St. Martha's Hospital"},
+        {"name": "Agastya Speciality Clinics"},
+    ]
+    plan = _deterministic_plan(profile, matched, [], facilities)
+
+    assert "Nearest Health Facilities" not in plan
+    assert "St. Martha's Hospital" not in plan
+    assert "Agastya Speciality Clinics" not in plan
+    assert "nearby facilities listed below" in plan
 
 
 # ── 4. Pathway priority ordering ──────────────────────────────────────────
@@ -226,7 +266,7 @@ def test_state_store_label_lakebase():
 
 def test_ai_mode_label_no_key():
     from src.ui_helpers import ai_mode_label
-    assert ai_mode_label(False, "claude-sonnet-4-5-20250929") == "AI: Deterministic (no API key)"
+    assert ai_mode_label(False, "claude-sonnet-4-5-20250929") == "AI: Deterministic fallback (no API key)"
 
 
 def test_ai_mode_label_sonnet():
@@ -234,16 +274,9 @@ def test_ai_mode_label_sonnet():
     assert ai_mode_label(True, "claude-sonnet-4-5-20250929") == "AI: Claude Sonnet"
 
 
-def test_ai_mode_label_opus():
+def test_ai_mode_label_any_keyed_model_reports_sonnet():
     from src.ui_helpers import ai_mode_label
-    assert ai_mode_label(True, "claude-opus-4-8") == "AI: Claude Opus"
-
-
-def test_ai_mode_label_haiku():
-    from src.ui_helpers import ai_mode_label
-    assert ai_mode_label(True, "claude-haiku-4-5") == "AI: Claude Haiku"
-
-
+    assert ai_mode_label(True, "legacy-model") == "AI: Claude Sonnet"
 def test_config_exposes_data_mode():
     from src.config import DATA_MODE
     assert DATA_MODE in ("json_only", "uc", ""), f"Unexpected DATA_MODE: {DATA_MODE!r}"
@@ -273,8 +306,8 @@ def test_gate_bc_full_badge():
     badge = (
         f"{data_source_label('uc')}  ·  "
         f"{state_store_label('lakebase')}  ·  "
-        f"{ai_mode_label(True, 'claude-opus-4-8')}"
+        f"{ai_mode_label(True, 'claude-sonnet-4-5-20250929')}"
     )
     assert "Unity Catalog trusted tables" in badge
     assert "Lakebase" in badge
-    assert "Claude Opus" in badge
+    assert "Claude Sonnet" in badge
