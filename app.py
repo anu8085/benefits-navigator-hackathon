@@ -10,7 +10,7 @@ import json
 
 import streamlit as st
 
-from src.config import CLAUDE_AVAILABLE, CLAUDE_MODEL, SAMPLE_DATA_DIR
+from src.config import CLAUDE_AVAILABLE, CLAUDE_MODEL, DATA_MODE, SAMPLE_DATA_DIR, STATE_STORE_MODE
 from src.data_loader import (
     _load,
     _norm,
@@ -23,10 +23,18 @@ from src.data_loader import (
     load_scenarios,
 )
 from src.profile_extractor import extract_profile
+from src.followup import apply_followup_answers, generate_followup_questions
 from src.rules_engine import _eval_condition, match_pathways
 from src.action_plan import generate_action_plan
 from src.state_store import StateStore
-from src.ui_helpers import format_facility, get_nfhs_display_rows, preferred_district_index
+from src.ui_helpers import (
+    ai_mode_label,
+    data_source_label,
+    format_facility,
+    get_nfhs_display_rows,
+    preferred_district_index,
+    state_store_label,
+)
 
 # ── Page config ─────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -41,6 +49,8 @@ _STATE_DEFAULTS: dict = {
     "step": 0,
     "raw_text": "",
     "profile": None,
+    "followup_questions": [],
+    "followup_answers": {},
     "matched_pathways": [],
     "action_plan": "",
     "plan_method": "",
@@ -57,12 +67,12 @@ pathways = load_pathways()
 
 # ── Header ───────────────────────────────────────────────────────────────────
 st.title("🌉 BenefitBridge AI")
-mode_label = f"Claude AI ({CLAUDE_MODEL})" if CLAUDE_AVAILABLE else "Deterministic (no API key)"
-st.caption(
-    "Connecting families to health benefits in India · "
-    f"AI mode: **{mode_label}** · "
-    f"Data: local sample JSON (Gate A)"
+_badge = (
+    f"{data_source_label(DATA_MODE)}  ·  "
+    f"{state_store_label(STATE_STORE_MODE)}  ·  "
+    f"{ai_mode_label(CLAUDE_AVAILABLE, CLAUDE_MODEL)}"
 )
+st.caption(_badge)
 
 tab1, tab2, tab3 = st.tabs(
     ["👪 Family Navigator", "📊 Program Leader Dashboard", "🔍 Data Trust / Debug"]
@@ -99,37 +109,113 @@ with tab1:
         )
 
         if st.button("Analyse My Family Profile", type="primary", disabled=not raw.strip()):
-            spinner_msg = "Extracting profile with Claude…" if CLAUDE_AVAILABLE else "Extracting profile…"
+            spinner_msg = (
+                "Analysing your situation with Claude…"
+                if CLAUDE_AVAILABLE
+                else "Extracting profile…"
+            )
             with st.spinner(spinner_msg):
                 profile = extract_profile(raw.strip())
 
-            pincode = profile.get("pincode") or ""
-            district_info: dict = {}
-            nfhs_rows: list[dict] = []
-            facilities: list[dict] = []
+                pincode = profile.get("pincode") or ""
+                district_info: dict = {}
+                nfhs_rows: list[dict] = []
+                facilities: list[dict] = []
 
-            if pincode:
-                district_info = get_district_for_pincode(pincode) or {}
-                if district_info:
-                    profile["district_norm"] = district_info["district_norm"]
-                    profile["state_norm"] = district_info["state_norm"]
-                    nfhs_rows = get_nfhs_for_district(
-                        district_info["district_norm"], district_info["state_norm"]
-                    )
-                    facilities = get_facilities(
-                        pincode, district_info["district_norm"], district_info["state_norm"]
-                    )
+                if pincode:
+                    district_info = get_district_for_pincode(pincode) or {}
+                    if district_info:
+                        profile["district_norm"] = district_info["district_norm"]
+                        profile["state_norm"] = district_info["state_norm"]
+                        nfhs_rows = get_nfhs_for_district(
+                            district_info["district_norm"], district_info["state_norm"]
+                        )
+                        facilities = get_facilities(
+                            pincode, district_info["district_norm"], district_info["state_norm"]
+                        )
+
+                followup_qs = generate_followup_questions(profile, raw.strip())
 
             st.session_state.raw_text = raw.strip()
             st.session_state.profile = profile
             st.session_state.district_info = district_info
             st.session_state.nfhs_rows = nfhs_rows
             st.session_state.facilities_list = facilities
+            st.session_state.followup_questions = followup_qs
+            st.session_state.followup_answers = {}
             st.session_state.step = 1
             st.rerun()
 
-    # ── STEP 1: Profile review / edit ───────────────────────────────────────
+    # ── STEP 1: Follow-up questions (agentic clarification) ─────────────────
     elif step == 1:
+        profile: dict = st.session_state.profile
+        questions: list[dict] = st.session_state.followup_questions
+
+        st.subheader("A few quick questions to personalise your plan")
+        st.caption(
+            "Answer 2–3 short questions so we can match the right support pathways for your family."
+        )
+
+        with st.expander("Your original description", expanded=False):
+            st.write(st.session_state.raw_text)
+
+        st.markdown("")
+
+        if not questions:
+            # Safety valve: if no questions generated, skip straight to profile review
+            st.session_state.step = 2
+            st.rerun()
+
+        form_answers: dict[str, str] = {}
+        with st.form("followup_form"):
+            for q in questions:
+                if q.get("type") == "radio" and q.get("options"):
+                    form_answers[q["id"]] = st.radio(
+                        q["question"],
+                        options=q["options"],
+                        index=0,
+                        key=f"fq_{q['id']}",
+                    )
+                else:
+                    form_answers[q["id"]] = st.text_input(
+                        q["question"],
+                        key=f"fq_{q['id']}",
+                        placeholder="Type your answer here…",
+                    )
+            submitted = st.form_submit_button(
+                "Answer follow-up questions and generate plan",
+                type="primary",
+            )
+
+        if submitted:
+            updated_profile = apply_followup_answers(profile, questions, form_answers)
+
+            # If pincode was just provided via follow-up, look up district now
+            new_pin = updated_profile.get("pincode") or ""
+            if new_pin and not st.session_state.district_info:
+                new_di = get_district_for_pincode(new_pin) or {}
+                if new_di:
+                    updated_profile["district_norm"] = new_di["district_norm"]
+                    updated_profile["state_norm"] = new_di["state_norm"]
+                    st.session_state.district_info = new_di
+                    st.session_state.nfhs_rows = get_nfhs_for_district(
+                        new_di["district_norm"], new_di["state_norm"]
+                    )
+                    st.session_state.facilities_list = get_facilities(
+                        new_pin, new_di["district_norm"], new_di["state_norm"]
+                    )
+
+            st.session_state.profile = updated_profile
+            st.session_state.followup_answers = form_answers
+            st.session_state.step = 2
+            st.rerun()
+
+        if st.button("← Back"):
+            st.session_state.step = 0
+            st.rerun()
+
+    # ── STEP 2: Profile review / edit ───────────────────────────────────────
+    elif step == 2:
         profile: dict = st.session_state.profile
 
         st.subheader("Confirm Your Family Profile")
@@ -192,7 +278,7 @@ with tab1:
         col_back, col_next = st.columns([1, 2])
         with col_back:
             if st.button("← Back"):
-                st.session_state.step = 0
+                st.session_state.step = 1
                 st.rerun()
         with col_next:
             if st.button("Find Support Pathways →", type="primary"):
@@ -224,11 +310,11 @@ with tab1:
                 st.session_state.matched_pathways = matched
                 st.session_state.action_plan = plan_text
                 st.session_state.plan_method = plan_method
-                st.session_state.step = 2
+                st.session_state.step = 3
                 st.rerun()
 
-    # ── STEP 2: Results ─────────────────────────────────────────────────────
-    elif step == 2:
+    # ── STEP 3: Results ─────────────────────────────────────────────────────
+    elif step == 3:
         profile = st.session_state.profile
         matched = st.session_state.matched_pathways
         plan_text = st.session_state.action_plan
@@ -242,11 +328,25 @@ with tab1:
         location_str = f"PIN {pin}" + (f" — {district}, {state}" if district else "")
         st.subheader(f"Results for {location_str}")
 
+        # Followup context summary (urgency / travel / insurance)
+        _ctx_parts = []
+        if profile.get("urgency"):
+            _ctx_parts.append(f"Support type: **{profile['urgency']}**")
+        if profile.get("travel_km"):
+            _ctx_parts.append(f"Travel range: **{profile['travel_km']} km**")
+        if profile.get("uninsured") is True:
+            _ctx_parts.append("Insurance: **uninsured** — Insurance Awareness pathway included")
+        if _ctx_parts:
+            st.caption("  ·  ".join(_ctx_parts))
+
         # Matched pathways
         if matched:
             st.write(f"**{len(matched)} support pathway(s) matched your profile:**")
             for pw in matched:
-                with st.expander(f"✅ {pw.get('pathway_name', pw.get('pathway_id'))}"):
+                with st.expander(
+                    pw.get("pathway_name", pw.get("pathway_id")),
+                    icon="✅",
+                ):
                     st.write(pw.get("recommended_action", ""))
                     st.caption(
                         f"Category: {pw.get('category', '')}  ·  "
@@ -293,10 +393,10 @@ with tab1:
             st.subheader("Nearby Health Facilities")
             for f in facilities[:5]:
                 fd = format_facility(f)
-                header = f"🏥 {fd['name']}"
+                _fac_label = fd["name"]
                 if fd["address"]:
-                    header += f"  ·  {fd['address'][:60]}"
-                with st.expander(header):
+                    _fac_label += f"  ·  {fd['address'][:60]}"
+                with st.expander(_fac_label, icon="🏥"):
                     if fd["phone"]:
                         st.write(f"📞 {fd['phone']}")
                     if fd["email"]:

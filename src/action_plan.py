@@ -40,28 +40,35 @@ def _deterministic_plan(
     if not matched_pathways:
         return (
             "No specific support pathways matched your profile at this time.\n\n"
-            "Please speak with a local Anganwadi worker or visit your nearest PHC for personalised guidance."
+            "Please speak with a local Anganwadi worker or visit your nearest "
+            "Primary Health Centre (PHC) for personalised guidance."
         )
 
     lines = ["**Your Personalised Action Plan**\n"]
     for i, pw in enumerate(matched_pathways, 1):
         name = pw.get("pathway_name", pw.get("pathway_id", ""))
-        action = pw.get("recommended_action", "Visit your nearest health centre.")
+        action = pw.get("recommended_action", "Visit your nearest health centre.").strip()
+        if not action.endswith("."):
+            action += "."
+        # Bold title on its own line; blank line before recommendation creates
+        # a proper markdown paragraph break for readability.
         lines.append(f"**Step {i}: {name}**")
+        lines.append("")
         lines.append(action)
         lines.append("")
 
     if facilities:
-        lines.append("**Nearest Health Facilities:**")
+        lines.append("---")
+        lines.append("**Nearest Health Facilities:**\n")
         for f in facilities[:3]:
-            name = f.get("name", "Unnamed facility")
+            fname = f.get("name", "Unnamed facility")
             city = f.get("address_city", "")
             phone = f.get("officialPhone") or ""
-            entry = f"- {name}"
+            entry = f"- **{fname}**"
             if city:
                 entry += f", {city}"
             if phone:
-                entry += f" | {phone}"
+                entry += f"  ·  {phone}"
             lines.append(entry)
 
     return "\n".join(lines)

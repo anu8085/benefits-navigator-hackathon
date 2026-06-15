@@ -18,3 +18,14 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 _DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-5-20250929"
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", _DEFAULT_CLAUDE_MODEL)
 CLAUDE_AVAILABLE = bool(ANTHROPIC_API_KEY)
+
+# Data source mode — controls the badge and (Gate B+) data fetching.
+# Accept either env var name so the badge works without renaming existing vars.
+DATA_MODE: str = (
+    os.environ.get("BENEFITBRIDGE_DATA_MODE")
+    or os.environ.get("BENEFITS_DATA_MODE")
+    or "json_only"
+).lower().strip()
+
+# State store mode — 'sqlite' (Gate A/B) or 'lakebase' (Gate C)
+STATE_STORE_MODE: str = os.environ.get("STATE_STORE_MODE", "sqlite").lower().strip()

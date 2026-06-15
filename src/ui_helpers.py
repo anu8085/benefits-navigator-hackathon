@@ -95,6 +95,34 @@ def get_nfhs_display_rows(nfhs_row: dict) -> list[dict]:
     return result
 
 
+def data_source_label(data_mode: str) -> str:
+    """Human-readable data-source label for the app badge (no secrets)."""
+    if data_mode.lower().strip() == "uc":
+        return "Data source: Unity Catalog trusted tables"
+    return "Data source: Local sample JSON (Gate A)"
+
+
+def state_store_label(state_mode: str) -> str:
+    """Human-readable state-store label for the app badge."""
+    if state_mode.lower().strip() == "lakebase":
+        return "State: Lakebase"
+    return "State: Local SQLite fallback"
+
+
+def ai_mode_label(claude_available: bool, claude_model: str) -> str:
+    """Human-readable AI-mode label for the app badge."""
+    if not claude_available:
+        return "AI: Deterministic (no API key)"
+    m = claude_model.lower()
+    if "sonnet" in m:
+        return "AI: Claude Sonnet"
+    if "opus" in m:
+        return "AI: Claude Opus"
+    if "haiku" in m:
+        return "AI: Claude Haiku"
+    return "AI: Claude"
+
+
 def preferred_district_index(district_names: list[str], recent_district_norm: str) -> int:
     """Return the best default selectbox index for the Program Leader Dashboard.
 
