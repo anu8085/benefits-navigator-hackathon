@@ -4,6 +4,16 @@ import re
 _BETWEEN_RE = re.compile(r'^(\w+)\s+BETWEEN\s+(\d+)\s+AND\s+(\d+)$', re.I)
 _BOOL_RE = re.compile(r'^(\w+)\s*=\s*(true|false)$', re.I)
 
+# Lower number = shown first.  Women's screening is "also consider" — placed last.
+_PATHWAY_PRIORITY: dict[str, int] = {
+    "maternal_care": 0,
+    "child_nutrition": 1,
+    "immunization": 2,
+    "health_insurance_awareness": 3,
+    "household_health_risk": 4,
+    "women_preventive_screening": 5,
+}
+
 
 def _eval_atom(atom: str, profile: dict) -> bool:
     atom = atom.strip()
@@ -45,7 +55,7 @@ def _eval_condition(condition: str, profile: dict) -> bool:
 
 
 def match_pathways(profile: dict, pathways: list[dict]) -> list[dict]:
-    """Return pathways whose trigger_condition matches the profile."""
+    """Return matched pathways sorted by clinical priority (maternal/child first, screening last)."""
     matched = []
     for pw in pathways:
         flag = str(pw.get("active_flag", "true")).strip().lower()
@@ -54,4 +64,5 @@ def match_pathways(profile: dict, pathways: list[dict]) -> list[dict]:
         cond = pw.get("trigger_condition", "")
         if cond and _eval_condition(cond, profile):
             matched.append(pw)
+    matched.sort(key=lambda pw: _PATHWAY_PRIORITY.get(pw.get("pathway_id", ""), 99))
     return matched

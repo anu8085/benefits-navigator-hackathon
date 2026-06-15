@@ -93,3 +93,28 @@ def get_nfhs_display_rows(nfhs_row: dict) -> list[dict]:
         display, quality = safe_nfhs_value(v)
         result.append({"label": label, "value": display, "quality": quality, "key": key})
     return result
+
+
+def preferred_district_index(district_names: list[str], recent_district_norm: str) -> int:
+    """Return the best default selectbox index for the Program Leader Dashboard.
+
+    Priority: most-recent session district → Bangalore → first available.
+    """
+    from .data_loader import get_district_alias
+
+    def _norm(s: str) -> str:
+        return s.upper().strip()
+
+    if recent_district_norm:
+        alias = _norm(get_district_alias(recent_district_norm))
+        norm_recent = _norm(recent_district_norm)
+        for i, dn in enumerate(district_names):
+            n = _norm(dn)
+            if n == norm_recent or n == alias:
+                return i
+
+    for i, dn in enumerate(district_names):
+        if "BANGALORE" in _norm(dn):
+            return i
+
+    return 0

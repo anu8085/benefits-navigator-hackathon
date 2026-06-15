@@ -26,7 +26,7 @@ from src.profile_extractor import extract_profile
 from src.rules_engine import _eval_condition, match_pathways
 from src.action_plan import generate_action_plan
 from src.state_store import StateStore
-from src.ui_helpers import format_facility, get_nfhs_display_rows
+from src.ui_helpers import format_facility, get_nfhs_display_rows, preferred_district_index
 
 # ── Page config ─────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -331,7 +331,10 @@ with tab2:
         if not district_names:
             st.warning("No district names found in NFHS data.")
         else:
-            selected_district = st.selectbox("Select district:", district_names)
+            _recent = store.get_recent_sessions(1)
+            _recent_dist = _recent[0].get("district_norm", "") if _recent else ""
+            _default_idx = preferred_district_index(district_names, _recent_dist)
+            selected_district = st.selectbox("Select district:", district_names, index=_default_idx)
             sel_row = next(
                 (r for r in all_nfhs if r.get("district_name", "").strip() == selected_district),
                 None,

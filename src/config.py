@@ -15,5 +15,6 @@ LOCAL_STATE_DIR.mkdir(exist_ok=True)
 SQLITE_PATH = LOCAL_STATE_DIR / "benefitbridge_local.db"
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-opus-4-8")
+_DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-5-20250929"
+CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", _DEFAULT_CLAUDE_MODEL)
 CLAUDE_AVAILABLE = bool(ANTHROPIC_API_KEY)

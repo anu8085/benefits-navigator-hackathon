@@ -8,6 +8,18 @@ Generate a concise, actionable benefit enrollment plan in plain English (max 400
 Structure it as numbered steps the family can take TODAY.
 Reference the matched support pathways and nearby facilities by name.
 Use language simple enough for a community health worker to read aloud.
+
+GROUNDING RULES — follow strictly:
+- Use ONLY the support pathways and facility information explicitly provided in this prompt.
+- Do NOT name specific government schemes (Ayushman Bharat, ICDS, PM Matru Vandana Yojana,
+  Janani Suraksha Yojana, PMMVY, or any other) unless the pathway text below explicitly names them.
+- Do NOT promise free food, free medicines, or free services unless the pathway text says so.
+- For nutrition needs always say: "Ask the nearest public health facility or local health worker
+  about nutrition support options available in your area."
+- For health insurance always say: "If you have insurance, confirm whether pregnancy and child care
+  are covered. If you do not, ask the facility what public coverage or low-cost options may be available."
+- Never assume the family has insurance unless the profile explicitly states uninsured=False.
+- When uncertain about a specific service say: "Ask your local health worker or facility."
 """
 
 _NFHS_DISPLAY_COLS = [
