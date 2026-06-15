@@ -1,0 +1,902 @@
+[
+  {
+    "pincode": "560001",
+    "district_norm": "BENGALURU URBAN",
+    "state_norm": "KARNATAKA",
+    "post_office_count": "9",
+    "unique_post_offices": "9",
+    "sample_latitude": "12.161027799999999",
+    "sample_longitude": "77.569194400000001"
+  },
+  {
+    "pincode": "562126",
+    "district_norm": "RAMANAGARA",
+    "state_norm": "KARNATAKA",
+    "post_office_count": "7",
+    "unique_post_offices": "7",
+    "sample_latitude": "12.4000000",
+    "sample_longitude": "77.2800000"
+  },
+  {
+    "pincode": "506356",
+    "district_norm": "JAYASHANKAR BHUPALAPALLY",
+    "state_norm": "TELANGANA",
+    "post_office_count": "16",
+    "unique_post_offices": "16",
+    "sample_latitude": "18.2549000",
+    "sample_longitude": "58.6359000"
+  },
+  {
+    "pincode": "625104",
+    "district_norm": "MADURAI",
+    "state_norm": "TAMIL NADU",
+    "post_office_count": "5",
+    "unique_post_offices": "5",
+    "sample_latitude": "9.9569760",
+    "sample_longitude": "78.1607190"
+  },
+  {
+    "pincode": "207246",
+    "district_norm": "KASGANJ",
+    "state_norm": "UTTAR PRADESH",
+    "post_office_count": "14",
+    "unique_post_offices": "14",
+    "sample_latitude": "27.6000000",
+    "sample_longitude": "78.7900000"
+  },
+  {
+    "pincode": "144212",
+    "district_norm": "HOSHIARPUR",
+    "state_norm": "PUNJAB",
+    "post_office_count": "9",
+    "unique_post_offices": "9",
+    "sample_latitude": "31.2400000",
+    "sample_longitude": "75.6600000"
+  },
+  {
+    "pincode": "573130",
+    "district_norm": "HASSAN",
+    "state_norm": "KARNATAKA",
+    "post_office_count": "11",
+    "unique_post_offices": "11",
+    "sample_latitude": "12.5800000",
+    "sample_longitude": "75.9500000"
+  },
+  {
+    "pincode": "335027",
+    "district_norm": "GANGANAGAR",
+    "state_norm": "RAJASTHAN",
+    "post_office_count": "14",
+    "unique_post_offices": "14",
+    "sample_latitude": "29.5048700",
+    "sample_longitude": "72.599592999999999"
+  },
+  {
+    "pincode": "276204",
+    "district_norm": "AZAMGARH",
+    "state_norm": "UTTAR PRADESH",
+    "post_office_count": "15",
+    "unique_post_offices": "15",
+    "sample_latitude": "10.2000000",
+    "sample_longitude": "20.1000000"
+  },
+  {
+    "pincode": "628907",
+    "district_norm": "TUTICORIN",
+    "state_norm": "TAMIL NADU",
+    "post_office_count": "9",
+    "unique_post_offices": "9",
+    "sample_latitude": "8.9942000",
+    "sample_longitude": "77.9306000"
+  },
+  {
+    "pincode": "231208",
+    "district_norm": "SONBHADRA",
+    "state_norm": "UTTAR PRADESH",
+    "post_office_count": "36",
+    "unique_post_offices": "36",
+    "sample_latitude": "23.901219999999999",
+    "sample_longitude": "22.763672"
+  },
+  {
+    "pincode": "484001",
+    "district_norm": "SHAHDOL",
+    "state_norm": "MADHYA PRADESH",
+    "post_office_count": "24",
+    "unique_post_offices": "24",
+    "sample_latitude": "22.9734000",
+    "sample_longitude": "78.6568000"
+  },
+  {
+    "pincode": "410507",
+    "district_norm": "PUNE",
+    "state_norm": "MAHARASHTRA",
+    "post_office_count": "7",
+    "unique_post_offices": "7",
+    "sample_latitude": "18.7277378",
+    "sample_longitude": "73.456314000000006"
+  },
+  {
+    "pincode": "416509",
+    "district_norm": "KOLHAPUR",
+    "state_norm": "MAHARASHTRA",
+    "post_office_count": "16",
+    "unique_post_offices": "16",
+    "sample_latitude": "15.840306999999999",
+    "sample_longitude": "74.118418000000005"
+  },
+  {
+    "pincode": "144502",
+    "district_norm": "SHAHID BHAGAT SINGH NAGAR",
+    "state_norm": "PUNJAB",
+    "post_office_count": "2",
+    "unique_post_offices": "2",
+    "sample_latitude": "31.156099999999999",
+    "sample_longitude": "75.876900000000006"
+  },
+  {
+    "pincode": "635804",
+    "district_norm": "VELLORE",
+    "state_norm": "TAMIL NADU",
+    "post_office_count": "6",
+    "unique_post_offices": "6",
+    "sample_latitude": "12.8234130",
+    "sample_longitude": "78.8640580"
+  },
+  {
+    "pincode": "762016",
+    "district_norm": "BOUDH",
+    "state_norm": "ODISHA",
+    "post_office_count": "20",
+    "unique_post_offices": "20",
+    "sample_latitude": "20.8247333",
+    "sample_longitude": "83.9137283"
+  },
+  {
+    "pincode": "307032",
+    "district_norm": "SIROHI",
+    "state_norm": "RAJASTHAN",
+    "post_office_count": "9",
+    "unique_post_offices": "9",
+    "sample_latitude": "24.416443000000001",
+    "sample_longitude": "72.081512000000004"
+  },
+  {
+    "pincode": "734434",
+    "district_norm": "DARJEELING",
+    "state_norm": "WEST BENGAL",
+    "post_office_count": "7",
+    "unique_post_offices": "7",
+    "sample_latitude": "25.6925000",
+    "sample_longitude": "88.2626750"
+  },
+  {
+    "pincode": "242303",
+    "district_norm": "SHAHJAHANPUR",
+    "state_norm": "UTTAR PRADESH",
+    "post_office_count": "15",
+    "unique_post_offices": "15",
+    "sample_latitude": "27.8837000",
+    "sample_longitude": "79.5488056"
+  },
+  {
+    "pincode": "274307",
+    "district_norm": "KUSHI NAGAR",
+    "state_norm": "UTTAR PRADESH",
+    "post_office_count": "10",
+    "unique_post_offices": "10",
+    "sample_latitude": "26.2100000",
+    "sample_longitude": "83.2600000"
+  },
+  {
+    "pincode": "245101",
+    "district_norm": "HAPUR",
+    "state_norm": "UTTAR PRADESH",
+    "post_office_count": "30",
+    "unique_post_offices": "30",
+    "sample_latitude": "23.6548740",
+    "sample_longitude": "65.4879250"
+  },
+  {
+    "pincode": "285123",
+    "district_norm": "JALAUN",
+    "state_norm": "UTTAR PRADESH",
+    "post_office_count": "32",
+    "unique_post_offices": "32",
+    "sample_latitude": "25.8371800",
+    "sample_longitude": "79.1181600"
+  },
+  {
+    "pincode": "231304",
+    "district_norm": "MIRZAPUR",
+    "state_norm": "UTTAR PRADESH",
+    "post_office_count": "47",
+    "unique_post_offices": "47",
+    "sample_latitude": "24.380815999999999",
+    "sample_longitude": "82.5818000"
+  },
+  {
+    "pincode": "676102",
+    "district_norm": "MALAPPURAM",
+    "state_norm": "KERALA",
+    "post_office_count": "9",
+    "unique_post_offices": "9",
+    "sample_latitude": "10.8155644",
+    "sample_longitude": "75.9121792"
+  },
+  {
+    "pincode": "486338",
+    "district_norm": "REWA",
+    "state_norm": "MADHYA PRADESH",
+    "post_office_count": "6",
+    "unique_post_offices": "6",
+    "sample_latitude": "24.5372000",
+    "sample_longitude": "81.3042000"
+  },
+  {
+    "pincode": "581334",
+    "district_norm": "UTTARA KANNADA",
+    "state_norm": "KARNATAKA",
+    "post_office_count": "16",
+    "unique_post_offices": "16",
+    "sample_latitude": "14.2331641",
+    "sample_longitude": "74.4402861"
+  },
+  {
+    "pincode": "413112",
+    "district_norm": "SOLAPUR",
+    "state_norm": "MAHARASHTRA",
+    "post_office_count": "8",
+    "unique_post_offices": "8",
+    "sample_latitude": "17.0459167",
+    "sample_longitude": "75.0786360"
+  },
+  {
+    "pincode": "413221",
+    "district_norm": "SOLAPUR",
+    "state_norm": "MAHARASHTRA",
+    "post_office_count": "11",
+    "unique_post_offices": "11",
+    "sample_latitude": "17.4723000",
+    "sample_longitude": "75.4302000"
+  },
+  {
+    "pincode": "473995",
+    "district_norm": "SHIVPURI",
+    "state_norm": "MADHYA PRADESH",
+    "post_office_count": "22",
+    "unique_post_offices": "22",
+    "sample_latitude": "25.001042797450602",
+    "sample_longitude": "77.7053850"
+  },
+  {
+    "pincode": "624620",
+    "district_norm": "DINDIGUL",
+    "state_norm": "TAMIL NADU",
+    "post_office_count": "11",
+    "unique_post_offices": "11",
+    "sample_latitude": "10.4200000",
+    "sample_longitude": "77.9600000"
+  },
+  {
+    "pincode": "431722",
+    "district_norm": "NANDED",
+    "state_norm": "MAHARASHTRA",
+    "post_office_count": "11",
+    "unique_post_offices": "11",
+    "sample_latitude": "18.747361",
+    "sample_longitude": "77.411436"
+  },
+  {
+    "pincode": "345001",
+    "district_norm": "JAISALMER",
+    "state_norm": "RAJASTHAN",
+    "post_office_count": "119",
+    "unique_post_offices": "119",
+    "sample_latitude": "26.132099",
+    "sample_longitude": "69.511269999999996"
+  },
+  {
+    "pincode": "643238",
+    "district_norm": "THE NILGIRIS",
+    "state_norm": "TAMIL NADU",
+    "post_office_count": "2",
+    "unique_post_offices": "2",
+    "sample_latitude": "11.2962820",
+    "sample_longitude": "76.7760440"
+  },
+  {
+    "pincode": "415802",
+    "district_norm": "RATNAGIRI",
+    "state_norm": "MAHARASHTRA",
+    "post_office_count": "7",
+    "unique_post_offices": "7",
+    "sample_latitude": "16.861951000000001",
+    "sample_longitude": "73.549003900000002"
+  },
+  {
+    "pincode": "752064",
+    "district_norm": "KHORDHA",
+    "state_norm": "ODISHA",
+    "post_office_count": "7",
+    "unique_post_offices": "7",
+    "sample_latitude": "20.1446100",
+    "sample_longitude": "85.3619045"
+  },
+  {
+    "pincode": "148002",
+    "district_norm": "SANGRUR",
+    "state_norm": "PUNJAB",
+    "post_office_count": "14",
+    "unique_post_offices": "14",
+    "sample_latitude": "26.1098720",
+    "sample_longitude": "72.8264380"
+  },
+  {
+    "pincode": "303303",
+    "district_norm": "DAUSA",
+    "state_norm": "RAJASTHAN",
+    "post_office_count": "20",
+    "unique_post_offices": "20",
+    "sample_latitude": "25.5874900",
+    "sample_longitude": "73.0346240"
+  },
+  {
+    "pincode": "572220",
+    "district_norm": "TUMAKURU",
+    "state_norm": "KARNATAKA",
+    "post_office_count": "6",
+    "unique_post_offices": "6",
+    "sample_latitude": "13.2355454",
+    "sample_longitude": "76.8175982"
+  },
+  {
+    "pincode": "246179",
+    "district_norm": "PAURI GARHWAL",
+    "state_norm": "UTTARAKHAND",
+    "post_office_count": "17",
+    "unique_post_offices": "17",
+    "sample_latitude": "29.7708889",
+    "sample_longitude": "78.8714167"
+  },
+  {
+    "pincode": "221309",
+    "district_norm": "BHADOHI",
+    "state_norm": "UTTAR PRADESH",
+    "post_office_count": "9",
+    "unique_post_offices": "9",
+    "sample_latitude": "25.2800000",
+    "sample_longitude": "82.2680310"
+  },
+  {
+    "pincode": "243726",
+    "district_norm": "BUDAUN",
+    "state_norm": "UTTAR PRADESH",
+    "post_office_count": "11",
+    "unique_post_offices": "11",
+    "sample_latitude": "28.1108538",
+    "sample_longitude": "79.0390799"
+  },
+  {
+    "pincode": "691524",
+    "district_norm": "PATHANAMTHITTA",
+    "state_norm": "KERALA",
+    "post_office_count": "3",
+    "unique_post_offices": "3",
+    "sample_latitude": "9.1100000",
+    "sample_longitude": "76.2000000"
+  },
+  {
+    "pincode": "272195",
+    "district_norm": "SIDDHARTH NAGAR",
+    "state_norm": "UTTAR PRADESH",
+    "post_office_count": "8",
+    "unique_post_offices": "8",
+    "sample_latitude": "25.3961630",
+    "sample_longitude": "81.2964330"
+  },
+  {
+    "pincode": "210507",
+    "district_norm": "HAMIRPUR",
+    "state_norm": "UTTAR PRADESH",
+    "post_office_count": "23",
+    "unique_post_offices": "23",
+    "sample_latitude": "25.5725140",
+    "sample_longitude": "79.9651660"
+  },
+  {
+    "pincode": "224195",
+    "district_norm": "AYODHYA",
+    "state_norm": "UTTAR PRADESH",
+    "post_office_count": "8",
+    "unique_post_offices": "8",
+    "sample_latitude": "26.5089840",
+    "sample_longitude": "79.8044590"
+  },
+  {
+    "pincode": "670645",
+    "district_norm": "WAYANAD",
+    "state_norm": "KERALA",
+    "post_office_count": "18",
+    "unique_post_offices": "18",
+    "sample_latitude": "11.4210935",
+    "sample_longitude": "75.9000000"
+  },
+  {
+    "pincode": "146109",
+    "district_norm": "HOSHIARPUR",
+    "state_norm": "PUNJAB",
+    "post_office_count": "10",
+    "unique_post_offices": "10",
+    "sample_latitude": "30.5700000",
+    "sample_longitude": "74.6900000"
+  },
+  {
+    "pincode": "431542",
+    "district_norm": "HINGOLI",
+    "state_norm": "MAHARASHTRA",
+    "post_office_count": "20",
+    "unique_post_offices": "20",
+    "sample_latitude": "19.524382",
+    "sample_longitude": "76.488181"
+  },
+  {
+    "pincode": "577180",
+    "district_norm": "CHIKKAMAGALURU",
+    "state_norm": "KARNATAKA",
+    "post_office_count": "4",
+    "unique_post_offices": "4",
+    "sample_latitude": "13.6474500",
+    "sample_longitude": "76.1519674"
+  },
+  {
+    "pincode": "787051",
+    "district_norm": "LAKHIMPUR",
+    "state_norm": "ASSAM",
+    "post_office_count": "7",
+    "unique_post_offices": "7",
+    "sample_latitude": "27.1738000",
+    "sample_longitude": "94.0548000"
+  },
+  {
+    "pincode": "822115",
+    "district_norm": "PALAMU",
+    "state_norm": "JHARKHAND",
+    "post_office_count": "11",
+    "unique_post_offices": "11",
+    "sample_latitude": "23.3945100",
+    "sample_longitude": "83.8874"
+  },
+  {
+    "pincode": "504251",
+    "district_norm": "MANCHERIAL",
+    "state_norm": "TELANGANA",
+    "post_office_count": "17",
+    "unique_post_offices": "17",
+    "sample_latitude": "18.8562844",
+    "sample_longitude": "78.5333000"
+  },
+  {
+    "pincode": "481332",
+    "district_norm": "BALAGHAT",
+    "state_norm": "MADHYA PRADESH",
+    "post_office_count": "9",
+    "unique_post_offices": "9",
+    "sample_latitude": "21.7800000",
+    "sample_longitude": "80.2500000"
+  },
+  {
+    "pincode": "533126",
+    "district_norm": "KONASEEMA",
+    "state_norm": "ANDHRA PRADESH",
+    "post_office_count": "2",
+    "unique_post_offices": "2",
+    "sample_latitude": "16.8390000",
+    "sample_longitude": "81.8262000"
+  },
+  {
+    "pincode": "815314",
+    "district_norm": "GIRIDIH",
+    "state_norm": "JHARKHAND",
+    "post_office_count": "20",
+    "unique_post_offices": "20",
+    "sample_latitude": "24.11",
+    "sample_longitude": "86.1"
+  },
+  {
+    "pincode": "841401",
+    "district_norm": "SARAN",
+    "state_norm": "BIHAR",
+    "post_office_count": "14",
+    "unique_post_offices": "14",
+    "sample_latitude": "25.974862999999999",
+    "sample_longitude": "84.925815999999998"
+  },
+  {
+    "pincode": "457888",
+    "district_norm": "ALIRAJPUR",
+    "state_norm": "MADHYA PRADESH",
+    "post_office_count": "31",
+    "unique_post_offices": "31",
+    "sample_latitude": "21.938865",
+    "sample_longitude": "74.159951000000007"
+  },
+  {
+    "pincode": "841403",
+    "district_norm": "SARAN",
+    "state_norm": "BIHAR",
+    "post_office_count": "20",
+    "unique_post_offices": "20",
+    "sample_latitude": "25.9998120",
+    "sample_longitude": "84.6889700"
+  },
+  {
+    "pincode": "361160",
+    "district_norm": "JAMNAGAR",
+    "state_norm": "GUJARAT",
+    "post_office_count": "25",
+    "unique_post_offices": "25",
+    "sample_latitude": "22.0300000",
+    "sample_longitude": "70.2000000"
+  },
+  {
+    "pincode": "361210",
+    "district_norm": "JAMNAGAR",
+    "state_norm": "GUJARAT",
+    "post_office_count": "13",
+    "unique_post_offices": "13",
+    "sample_latitude": "22.4900000",
+    "sample_longitude": "70.1300000"
+  },
+  {
+    "pincode": "431153",
+    "district_norm": "BEED",
+    "state_norm": "MAHARASHTRA",
+    "post_office_count": "24",
+    "unique_post_offices": "24",
+    "sample_latitude": "18.898168",
+    "sample_longitude": "75.662412"
+  },
+  {
+    "pincode": "605107",
+    "district_norm": "PONDICHERRY",
+    "state_norm": "PUDUCHERRY",
+    "post_office_count": "4",
+    "unique_post_offices": "4",
+    "sample_latitude": "11.9200000",
+    "sample_longitude": "79.6300000"
+  },
+  {
+    "pincode": "501505",
+    "district_norm": "RANGA REDDY",
+    "state_norm": "TELANGANA",
+    "post_office_count": "10",
+    "unique_post_offices": "10",
+    "sample_latitude": "17.28248",
+    "sample_longitude": "78.6064945"
+  },
+  {
+    "pincode": "507160",
+    "district_norm": "KHAMMAM",
+    "state_norm": "TELANGANA",
+    "post_office_count": "18",
+    "unique_post_offices": "18",
+    "sample_latitude": "17.0838844",
+    "sample_longitude": "79.9912915"
+  },
+  {
+    "pincode": "416612",
+    "district_norm": "SINDHUDURG",
+    "state_norm": "MAHARASHTRA",
+    "post_office_count": "7",
+    "unique_post_offices": "7",
+    "sample_latitude": "16.3353150",
+    "sample_longitude": "73.3817404"
+  },
+  {
+    "pincode": "521331",
+    "district_norm": "KRISHNA",
+    "state_norm": "ANDHRA PRADESH",
+    "post_office_count": "6",
+    "unique_post_offices": "6",
+    "sample_latitude": "16.33361111",
+    "sample_longitude": "81.07625"
+  },
+  {
+    "pincode": "577228",
+    "district_norm": "CHIKKAMAGALURU",
+    "state_norm": "KARNATAKA",
+    "post_office_count": "12",
+    "unique_post_offices": "12",
+    "sample_latitude": "13.640999000000001",
+    "sample_longitude": "75.7481088"
+  },
+  {
+    "pincode": "785106",
+    "district_norm": "MAJULI",
+    "state_norm": "ASSAM",
+    "post_office_count": "7",
+    "unique_post_offices": "7",
+    "sample_latitude": "26.9445555",
+    "sample_longitude": "94.1636666"
+  },
+  {
+    "pincode": "307029",
+    "district_norm": "JALORE",
+    "state_norm": "RAJASTHAN",
+    "post_office_count": "32",
+    "unique_post_offices": "32",
+    "sample_latitude": "21.1399470",
+    "sample_longitude": "1.0231940"
+  },
+  {
+    "pincode": "508248",
+    "district_norm": "NALGONDA",
+    "state_norm": "TELANGANA",
+    "post_office_count": "27",
+    "unique_post_offices": "27",
+    "sample_latitude": "16.6208400",
+    "sample_longitude": "78.2461000"
+  },
+  {
+    "pincode": "396125",
+    "district_norm": "VALSAD",
+    "state_norm": "GUJARAT",
+    "post_office_count": "16",
+    "unique_post_offices": "16",
+    "sample_latitude": "20.4422530",
+    "sample_longitude": "72.8936030"
+  },
+  {
+    "pincode": "509325",
+    "district_norm": "RANGA REDDY",
+    "state_norm": "TELANGANA",
+    "post_office_count": "11",
+    "unique_post_offices": "11",
+    "sample_latitude": "17.1374167",
+    "sample_longitude": "78.3199167"
+  },
+  {
+    "pincode": "629161",
+    "district_norm": "KANNIYAKUMARI",
+    "state_norm": "TAMIL NADU",
+    "post_office_count": "11",
+    "unique_post_offices": "11",
+    "sample_latitude": "7.8000000",
+    "sample_longitude": "77.2600000"
+  },
+  {
+    "pincode": "824127",
+    "district_norm": "AURANGABAD",
+    "state_norm": "BIHAR",
+    "post_office_count": "1",
+    "unique_post_offices": "1",
+    "sample_latitude": "19.876169999999998",
+    "sample_longitude": "75.343312999999995"
+  },
+  {
+    "pincode": "126116",
+    "district_norm": "JIND",
+    "state_norm": "HARYANA",
+    "post_office_count": "31",
+    "unique_post_offices": "31",
+    "sample_latitude": "23.5000000",
+    "sample_longitude": "22.3600000"
+  },
+  {
+    "pincode": "383422",
+    "district_norm": "SABAR KANTHA",
+    "state_norm": "GUJARAT",
+    "post_office_count": "16",
+    "unique_post_offices": "16",
+    "sample_latitude": "23.7510800",
+    "sample_longitude": "72.9992010"
+  },
+  {
+    "pincode": "313708",
+    "district_norm": "UDAIPUR",
+    "state_norm": "RAJASTHAN",
+    "post_office_count": "22",
+    "unique_post_offices": "22",
+    "sample_latitude": "24.4383056",
+    "sample_longitude": "73.1600000"
+  },
+  {
+    "pincode": "508115",
+    "district_norm": "YADADRI BHUVANAGIRI",
+    "state_norm": "TELANGANA",
+    "post_office_count": "15",
+    "unique_post_offices": "15",
+    "sample_latitude": "17.5895583",
+    "sample_longitude": "78.8118416"
+  },
+  {
+    "pincode": "782143",
+    "district_norm": "NAGAON",
+    "state_norm": "ASSAM",
+    "post_office_count": "5",
+    "unique_post_offices": "5",
+    "sample_latitude": "26.3618000",
+    "sample_longitude": "92.5545000"
+  },
+  {
+    "pincode": "517425",
+    "district_norm": "CHITTOOR",
+    "state_norm": "ANDHRA PRADESH",
+    "post_office_count": "21",
+    "unique_post_offices": "21",
+    "sample_latitude": "12.7477",
+    "sample_longitude": "78.3424"
+  },
+  {
+    "pincode": "423301",
+    "district_norm": "NASHIK",
+    "state_norm": "MAHARASHTRA",
+    "post_office_count": "34",
+    "unique_post_offices": "34",
+    "sample_latitude": "20.5544310",
+    "sample_longitude": "73.796164599999997"
+  },
+  {
+    "pincode": "844503",
+    "district_norm": "VAISHALI",
+    "state_norm": "BIHAR",
+    "post_office_count": "13",
+    "unique_post_offices": "13",
+    "sample_latitude": "25.653196",
+    "sample_longitude": "85.2113333"
+  },
+  {
+    "pincode": "574232",
+    "district_norm": "DAKSHINA KANNADA",
+    "state_norm": "KARNATAKA",
+    "post_office_count": "6",
+    "unique_post_offices": "6",
+    "sample_latitude": "12.6597384",
+    "sample_longitude": "75.4442561"
+  },
+  {
+    "pincode": "574142",
+    "district_norm": "DAKSHINA KANNADA",
+    "state_norm": "KARNATAKA",
+    "post_office_count": "8",
+    "unique_post_offices": "8",
+    "sample_latitude": "12.950701",
+    "sample_longitude": "74.8538112"
+  },
+  {
+    "pincode": "243633",
+    "district_norm": "BUDAUN",
+    "state_norm": "UTTAR PRADESH",
+    "post_office_count": "24",
+    "unique_post_offices": "24",
+    "sample_latitude": "28.0677442",
+    "sample_longitude": "78.6880908"
+  },
+  {
+    "pincode": "522438",
+    "district_norm": "GUNTUR",
+    "state_norm": "ANDHRA PRADESH",
+    "post_office_count": "7",
+    "unique_post_offices": "7",
+    "sample_latitude": "16.3257000",
+    "sample_longitude": "80.2315000"
+  },
+  {
+    "pincode": "686519",
+    "district_norm": "KOTTAYAM",
+    "state_norm": "KERALA",
+    "post_office_count": "3",
+    "unique_post_offices": "3",
+    "sample_latitude": "9.5180072",
+    "sample_longitude": "76.7621961"
+  },
+  {
+    "pincode": "515631",
+    "district_norm": "SRI SATHYA SAI",
+    "state_norm": "ANDHRA PRADESH",
+    "post_office_count": "15",
+    "unique_post_offices": "15",
+    "sample_latitude": "14.56097222",
+    "sample_longitude": "77.85722222"
+  },
+  {
+    "pincode": "275301",
+    "district_norm": "MAU",
+    "state_norm": "UTTAR PRADESH",
+    "post_office_count": "12",
+    "unique_post_offices": "12",
+    "sample_latitude": "20.0600000",
+    "sample_longitude": "80.0600000"
+  },
+  {
+    "pincode": "515144",
+    "district_norm": "SRI SATHYA SAI",
+    "state_norm": "ANDHRA PRADESH",
+    "post_office_count": "11",
+    "unique_post_offices": "11",
+    "sample_latitude": "14.19886111",
+    "sample_longitude": "77.80097222"
+  },
+  {
+    "pincode": "686564",
+    "district_norm": "KOTTAYAM",
+    "state_norm": "KERALA",
+    "post_office_count": "7",
+    "unique_post_offices": "7",
+    "sample_latitude": "15.5934000",
+    "sample_longitude": "76.4333000"
+  },
+  {
+    "pincode": "685608",
+    "district_norm": "IDUKKI",
+    "state_norm": "KERALA",
+    "post_office_count": "9",
+    "unique_post_offices": "9",
+    "sample_latitude": "9.88443",
+    "sample_longitude": "76.64830"
+  },
+  {
+    "pincode": "224119",
+    "district_norm": "AYODHYA",
+    "state_norm": "UTTAR PRADESH",
+    "post_office_count": "7",
+    "unique_post_offices": "7",
+    "sample_latitude": "26.775518000000002",
+    "sample_longitude": "81.578353000000007"
+  },
+  {
+    "pincode": "505501",
+    "district_norm": "JAGITIAL",
+    "state_norm": "TELANGANA",
+    "post_office_count": "8",
+    "unique_post_offices": "8",
+    "sample_latitude": "18.5867800",
+    "sample_longitude": "78.8680710"
+  },
+  {
+    "pincode": "835301",
+    "district_norm": "RANCHI",
+    "state_norm": "JHARKHAND",
+    "post_office_count": "16",
+    "unique_post_offices": "16",
+    "sample_latitude": "23.3243520",
+    "sample_longitude": "84.9101960"
+  },
+  {
+    "pincode": "841238",
+    "district_norm": "SIWAN",
+    "state_norm": "BIHAR",
+    "post_office_count": "17",
+    "unique_post_offices": "17",
+    "sample_latitude": "26.2269722",
+    "sample_longitude": "84.3564167"
+  },
+  {
+    "pincode": "451660",
+    "district_norm": "BARWANI",
+    "state_norm": "MADHYA PRADESH",
+    "post_office_count": "16",
+    "unique_post_offices": "16",
+    "sample_latitude": "21.9873000",
+    "sample_longitude": "74.9000000"
+  },
+  {
+    "pincode": "607108",
+    "district_norm": "CUDDALORE",
+    "state_norm": "TAMIL NADU",
+    "post_office_count": "5",
+    "unique_post_offices": "5",
+    "sample_latitude": "11.7900000",
+    "sample_longitude": "79.4900000"
+  },
+  {
+    "pincode": "854337",
+    "district_norm": "PURNIA",
+    "state_norm": "BIHAR",
+    "post_office_count": "6",
+    "unique_post_offices": "6",
+    "sample_latitude": "25.652265",
+    "sample_longitude": "80.636160000000004"
+  }
+]

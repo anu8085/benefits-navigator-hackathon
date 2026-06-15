@@ -1,0 +1,56 @@
+[
+  {
+    "pathway_id": "maternal_care",
+    "pathway_name": "Maternal Health Support",
+    "category": "maternal_health",
+    "trigger_condition": "pregnant=true OR recently_delivered=true",
+    "recommended_action": "Find nearby facilities with maternal, ANC, delivery, or postnatal services. Review district ANC and institutional birth indicators.",
+    "data_sources": "facilities,nfhs_5_district_health_indicators,pincode_district_lookup",
+    "active_flag": "true"
+  },
+  {
+    "pathway_id": "child_nutrition",
+    "pathway_name": "Child Nutrition Support",
+    "category": "child_health",
+    "trigger_condition": "child_under_5=true OR nutrition_need=true",
+    "recommended_action": "Review district stunting, wasting, underweight, diarrhea, and anemia indicators. Recommend nearby child-health or nutrition-related facilities.",
+    "data_sources": "facilities,nfhs_5_district_health_indicators,pincode_district_lookup",
+    "active_flag": "true"
+  },
+  {
+    "pathway_id": "immunization",
+    "pathway_name": "Child Immunization Support",
+    "category": "child_health",
+    "trigger_condition": "child_age_months BETWEEN 0 AND 35",
+    "recommended_action": "Review district vaccination indicators and suggest nearby facilities that may support child immunization or pediatric care.",
+    "data_sources": "facilities,nfhs_5_district_health_indicators,pincode_district_lookup",
+    "active_flag": "true"
+  },
+  {
+    "pathway_id": "health_insurance_awareness",
+    "pathway_name": "Health Insurance Awareness",
+    "category": "health_access",
+    "trigger_condition": "uninsured=true OR low_income=true",
+    "recommended_action": "Show district health-insurance coverage context and guide the user to ask local facilities or public-health offices about available coverage options.",
+    "data_sources": "nfhs_5_district_health_indicators,facilities",
+    "active_flag": "true"
+  },
+  {
+    "pathway_id": "household_health_risk",
+    "pathway_name": "Household Health Risk Support",
+    "category": "household_conditions",
+    "trigger_condition": "water_sanitation_need=true OR child_diarrhea_risk=true",
+    "recommended_action": "Review district water, sanitation, clean fuel, and diarrhea indicators. Provide prevention-oriented next steps and nearby facility referrals.",
+    "data_sources": "nfhs_5_district_health_indicators,facilities",
+    "active_flag": "true"
+  },
+  {
+    "pathway_id": "women_preventive_screening",
+    "pathway_name": "Women Preventive Screening Support",
+    "category": "preventive_health",
+    "trigger_condition": "adult_woman=true OR screening_need=true",
+    "recommended_action": "Review district cervical, breast, and oral cancer screening indicators. Recommend nearby facilities and questions to ask during visit.",
+    "data_sources": "nfhs_5_district_health_indicators,facilities",
+    "active_flag": "true"
+  }
+]

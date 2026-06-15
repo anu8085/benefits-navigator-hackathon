@@ -1,0 +1,38 @@
+[
+  {
+    "id": "scenario_maternal_nutrition",
+    "persona": "family",
+    "title": "Pregnant mother with a young child needing nutrition and facility help",
+    "scenario_text": "I live in pincode 560001. I am pregnant and I also have a 3-year-old child. I do not know where to go for affordable health services. I need help with nutrition for my child and finding a nearby health facility.",
+    "expected_signals": {
+      "pincode": "560001",
+      "pregnant": true,
+      "child_under_5": true,
+      "child_age_months": 36,
+      "needs": ["nutrition", "facility", "maternal_care"]
+    }
+  },
+  {
+    "id": "scenario_child_vaccination",
+    "persona": "family",
+    "title": "Parent with child needing vaccination and a nearby healthcare facility",
+    "scenario_text": "I have a 1-year-old baby in pincode 560001 and I want to make sure my child gets all the required vaccinations. Where is the closest place I can take my child for immunization?",
+    "expected_signals": {
+      "pincode": "560001",
+      "child_under_5": true,
+      "child_age_months": 12,
+      "needs": ["immunization", "facility"]
+    }
+  },
+  {
+    "id": "scenario_field_worker_district_risk",
+    "persona": "field_worker",
+    "title": "Field worker reviewing district-level health risk and facility gaps",
+    "scenario_text": "I am a field worker covering pincode 560001. I want to understand the district-level health risks for mothers and children, see which support pathways are most in demand, and find where facility coverage or contact information is missing.",
+    "expected_signals": {
+      "pincode": "560001",
+      "role": "field_worker",
+      "needs": ["district_risk_review", "facility_gap_analysis"]
+    }
+  }
+]
