@@ -8,7 +8,7 @@ evidence and uncertainty notes, and nearby facility recommendations.
 Uses Unity Catalog trusted tables (Gate B mode) with SQLite state store and Claude Sonnet.
 
 Session flow:
-  Screen 1 (step=0) - family care need input
+  Screen 1 (step=0) - family care needs input
   Screen 2 (step=1) - follow-up questions + profile card + "Generate support plan"
   Screen 3 (step=2) - matched pathways, support plan, NFHS indicators, facilities
 """
@@ -179,14 +179,14 @@ with tab1:
             f'</div></div>',
             unsafe_allow_html=True,
         )
-        st.subheader("Describe the family's care need")
+        st.subheader("Describe the family's care needs")
         st.caption(
             "As a community health worker or NGO coordinator, enter the family's health situation "
             "in plain language. TrustRoute AI will help identify support pathways and nearby facility options."
         )
 
         raw = st.text_area(
-            "Family situation and care need",
+            "Family situation and care needs",
             value=st.session_state.original_text,
             height=180,
             placeholder=(
@@ -211,7 +211,7 @@ with tab1:
                         st.session_state.original_text = sc["scenario_text"]
                         st.rerun()
 
-        if st.button("Analyze care need", type="primary", disabled=not raw.strip()):
+        if st.button("Find Trusted Care Options", type="primary", disabled=not raw.strip()):
             spinner_msg = (
                 "Analysing your situation with Claude..."
                 if CLAUDE_AVAILABLE

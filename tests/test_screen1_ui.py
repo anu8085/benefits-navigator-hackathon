@@ -180,4 +180,25 @@ def test_sample_scenarios_in_expander():
 
 
 def test_analyze_button_label():
-    assert '"Analyze care need"' in APP_SRC
+    assert '"Find Trusted Care Options"' in APP_SRC
+
+
+def test_screen1_subheader_uses_plural_care_needs():
+    assert "Describe the family's care needs" in APP_SRC
+
+
+def test_screen1_textarea_label_uses_plural_care_needs():
+    assert '"Family situation and care needs"' in APP_SRC
+
+
+def test_no_benefitbridge_in_user_facing_strings():
+    assert "BenefitBridge AI" not in APP_SRC
+
+
+def test_no_accidental_split_words_in_hero_and_footer():
+    split_patterns = [
+        "sup port", "rep lace", "loc ation", "fac ility",
+        "quest ions", "path ways", "confirm ation", "recomm ends",
+    ]
+    for pat in split_patterns:
+        assert pat not in APP_SRC, f"Split word found: '{pat}'"

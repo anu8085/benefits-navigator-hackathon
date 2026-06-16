@@ -102,7 +102,7 @@ def test_screen1_sample_scenarios_are_in_expander():
 
 def test_screen1_main_button_label_and_empty_guard():
     app_text = Path("app.py").read_text(encoding="utf-8")
-    assert '"Analyze care need"' in app_text
+    assert '"Find Trusted Care Options"' in app_text
     assert '"Analyse My Family Profile"' not in app_text
     assert "disabled=not raw.strip()" in app_text
 
