@@ -9,7 +9,7 @@ Structure it as numbered steps the family can take TODAY.
 Refer to the Nearby Health Facilities section below instead of listing facility names.
 Use language simple enough for a community health worker to read aloud.
 
-GROUNDING RULES — follow strictly:
+GROUNDING RULES - follow strictly:
 - Use ONLY the support pathways and facility information explicitly provided in this prompt.
 - Do NOT include a "Nearest Health Facilities" section or list facility names in the plan.
 - Do NOT name specific government schemes (Ayushman Bharat, ICDS, PM Matru Vandana Yojana,

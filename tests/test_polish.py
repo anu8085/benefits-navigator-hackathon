@@ -3,7 +3,7 @@ pathway priority, dashboard district preference, and data-source badge."""
 import pytest
 
 
-# ── 1. Default Claude model is Sonnet ──────────────────────────────────────
+# -- 1. Default Claude model is Sonnet --------------------------------------
 
 def test_default_claude_model_is_sonnet():
     """The fallback model ID (when CLAUDE_MODEL env var is unset) must be Sonnet."""
@@ -41,7 +41,7 @@ def test_config_uses_sonnet_when_model_env_is_legacy_non_sonnet(monkeypatch):
     monkeypatch.setenv("CLAUDE_MODEL", "claude-o" + "pus-4-8")
     config = importlib.reload(config)
     assert config.CLAUDE_MODEL == "claude-sonnet-4-5-20250929"
-# ── 2. Action plan system prompt has grounding rules ───────────────────────
+# -- 2. Action plan system prompt has grounding rules -----------------------
 
 def test_action_plan_prompt_forbids_scheme_names():
     """System prompt must explicitly prohibit inventing government scheme names."""
@@ -71,7 +71,7 @@ def test_deterministic_plan_no_invented_scheme_names():
         assert forbidden not in plan.lower(), f"Unexpected scheme reference: '{forbidden}'"
 
 
-# ── 3. Insurance wording is conditional ───────────────────────────────────
+# -- 3. Insurance wording is conditional -----------------------------------
 
 def test_action_plan_prompt_conditional_insurance():
     """System prompt must use the conditional insurance phrasing."""
@@ -111,7 +111,7 @@ def test_deterministic_plan_does_not_embed_facility_section_or_names():
     assert "nearby facilities listed below" in plan
 
 
-# ── 4. Pathway priority ordering ──────────────────────────────────────────
+# -- 4. Pathway priority ordering ------------------------------------------
 
 def test_maternal_care_before_screening():
     """maternal_care must appear before women_preventive_screening in matched output."""
@@ -166,7 +166,7 @@ def test_child_nutrition_before_screening():
 
 
 def test_demo_scenario_pathway_order():
-    """Demo: pregnant + 3yo — maternal first, screening last."""
+    """Demo: pregnant + 3yo - maternal first, screening last."""
     from src.rules_engine import match_pathways, _PATHWAY_PRIORITY
     from src.data_loader import load_pathways
 
@@ -193,7 +193,7 @@ def test_demo_scenario_pathway_order():
         assert ids[-1] == "women_preventive_screening", f"Expected screening last, got: {ids}"
 
 
-# ── 5. Dashboard district preference ──────────────────────────────────────
+# -- 5. Dashboard district preference --------------------------------------
 
 def test_preferred_district_favours_bangalore():
     from src.ui_helpers import preferred_district_index
@@ -214,7 +214,7 @@ def test_preferred_district_recent_exact_match():
     from src.ui_helpers import preferred_district_index
     districts = ["Anjaw", "Bangalore", "Delhi", "Mysore"]
     idx = preferred_district_index(districts, "BENGALURU URBAN")
-    # BENGALURU URBAN → alias BANGALORE → matches "Bangalore"
+    # BENGALURU URBAN -> alias BANGALORE -> matches "Bangalore"
     assert districts[idx] == "Bangalore"
 
 
@@ -222,18 +222,18 @@ def test_preferred_district_fallback_first():
     from src.ui_helpers import preferred_district_index
     districts = ["Anjaw", "Delhi", "Kolkata"]
     idx = preferred_district_index(districts, "")
-    assert idx == 0  # no Bangalore → first item
+    assert idx == 0  # no Bangalore -> first item
 
 
 def test_preferred_district_none_recent():
     from src.ui_helpers import preferred_district_index
     districts = ["Anjaw", "Bangalore", "Delhi"]
-    # Empty recent — Bangalore should win
+    # Empty recent - Bangalore should win
     idx = preferred_district_index(districts, "")
     assert districts[idx] == "Bangalore"
 
 
-# ── 6. Data-source badge ───────────────────────────────────────────────────
+# -- 6. Data-source badge ---------------------------------------------------
 
 def test_data_source_label_gate_a():
     from src.ui_helpers import data_source_label

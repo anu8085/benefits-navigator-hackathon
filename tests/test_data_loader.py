@@ -24,7 +24,7 @@ def test_unknown_pincode_returns_none():
 
 
 def test_nfhs_alias_resolves_bangalore():
-    """BENGALURU URBAN → alias BANGALORE → should match NFHS 'Bangalore ' row."""
+    """BENGALURU URBAN -> alias BANGALORE -> should match NFHS 'Bangalore ' row."""
     rows = get_nfhs_for_district("BENGALURU URBAN", "KARNATAKA")
     assert len(rows) > 0
     norm_names = [r.get("district_name", "").strip().upper() for r in rows]

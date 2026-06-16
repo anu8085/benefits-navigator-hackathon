@@ -1,8 +1,18 @@
 from __future__ import annotations
 import json
+from decimal import Decimal
+from functools import lru_cache
 from typing import Any
 
-from .config import SAMPLE_DATA_DIR
+from .config import (
+    DATA_MODE,
+    DATABRICKS_HTTP_PATH,
+    DATABRICKS_SERVER_HOSTNAME,
+    DATABRICKS_TOKEN,
+    SAMPLE_DATA_DIR,
+    UC_CATALOG,
+    UC_SCHEMA,
+)
 
 # Maps district_norm values (pincode_district_lookup) → NFHS district_name values (normalised)
 _DISTRICT_ALIAS: dict[str, str] = {
@@ -20,6 +30,80 @@ _DISTRICT_ALIAS: dict[str, str] = {
     "RAMANAGARA": "RAMANAGARAM",
 }
 
+_UC_TABLES: set[str] = {
+    "facilities",
+    "india_post_pincode_directory",
+    "pincode_district_lookup",
+    "nfhs_5_district_health_indicators",
+    "support_pathways",
+}
+
+_LOAD_CACHE: dict[str, list[dict]] = {}
+_TABLE_STATUS: dict[str, dict] = {}
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, Decimal):
+        return float(value)
+    return value
+
+
+def _qualified_table(name: str) -> str:
+    return f"`{UC_CATALOG}`.`{UC_SCHEMA}`.`{name}`"
+
+
+def _uc_config_error() -> str | None:
+    missing = [
+        key for key, value in [
+            ("DATABRICKS_SERVER_HOSTNAME", DATABRICKS_SERVER_HOSTNAME),
+            ("DATABRICKS_HTTP_PATH", DATABRICKS_HTTP_PATH),
+            ("DATABRICKS_TOKEN", DATABRICKS_TOKEN),
+        ] if not value
+    ]
+    if missing:
+        return "Missing Databricks env vars: " + ", ".join(missing)
+    return None
+
+
+def _redact_http_path(path: str) -> str:
+    if not path:
+        return ""
+    if len(path) <= 18:
+        return path[:4] + "..."
+    return f"{path[:12]}...{path[-6:]}"
+
+
+@lru_cache(maxsize=1)
+def _uc_connection():
+    config_error = _uc_config_error()
+    if config_error:
+        raise RuntimeError(config_error)
+    from databricks import sql
+
+    return sql.connect(
+        server_hostname=DATABRICKS_SERVER_HOSTNAME,
+        http_path=DATABRICKS_HTTP_PATH,
+        access_token=DATABRICKS_TOKEN,
+    )
+
+
+def _load_json(name: str) -> list[dict]:
+    path = SAMPLE_DATA_DIR / f"{name}.json"
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _load_uc_table(name: str) -> list[dict]:
+    with _uc_connection().cursor() as cursor:
+        cursor.execute(f"SELECT * FROM {_qualified_table(name)}")
+        columns = [desc[0] for desc in cursor.description]
+        return [
+            {col: _json_safe(value) for col, value in zip(columns, row)}
+            for row in cursor.fetchall()
+        ]
+
 
 def _norm(s: Any) -> str:
     return str(s or "").upper().strip()
@@ -35,11 +119,65 @@ def _safe_float(v: Any) -> float | None:
 
 
 def _load(name: str) -> list[dict]:
-    path = SAMPLE_DATA_DIR / f"{name}.json"
-    if not path.exists():
-        return []
-    with path.open(encoding="utf-8") as f:
-        return json.load(f)
+    if name in _LOAD_CACHE:
+        return _LOAD_CACHE[name]
+
+    if DATA_MODE == "uc" and name in _UC_TABLES:
+        try:
+            rows = _load_uc_table(name)
+            _TABLE_STATUS[name] = {
+                "source": "uc",
+                "row_count": len(rows),
+                "fallback_reason": None,
+            }
+            _LOAD_CACHE[name] = rows
+            return rows
+        except Exception as exc:
+            rows = _load_json(name)
+            _TABLE_STATUS[name] = {
+                "source": "json_fallback",
+                "row_count": len(rows),
+                "fallback_reason": f"Unity Catalog load failed: {type(exc).__name__}",
+            }
+            _LOAD_CACHE[name] = rows
+            return rows
+
+    rows = _load_json(name)
+    _TABLE_STATUS[name] = {
+        "source": "json",
+        "row_count": len(rows),
+        "fallback_reason": None,
+    }
+    _LOAD_CACHE[name] = rows
+    return rows
+
+
+def get_data_source_status() -> dict:
+    fallback_reasons = [
+        s.get("fallback_reason")
+        for s in _TABLE_STATUS.values()
+        if s.get("fallback_reason")
+    ]
+    expected_statuses = {
+        name: _TABLE_STATUS.get(name, {})
+        for name in sorted(_UC_TABLES)
+    }
+    if DATA_MODE == "uc" and fallback_reasons:
+        active_source = "json_fallback"
+    elif DATA_MODE == "uc" and any(s.get("source") == "uc" for s in expected_statuses.values()):
+        active_source = "uc"
+    else:
+        active_source = "json"
+    return {
+        "configured_mode": DATA_MODE,
+        "active_source": active_source,
+        "catalog": UC_CATALOG,
+        "schema": UC_SCHEMA,
+        "server_hostname": DATABRICKS_SERVER_HOSTNAME,
+        "http_path_redacted": _redact_http_path(DATABRICKS_HTTP_PATH),
+        "tables": dict(_TABLE_STATUS),
+        "fallback_reason": fallback_reasons[0] if fallback_reasons else None,
+    }
 
 
 def load_pathways() -> list[dict]:

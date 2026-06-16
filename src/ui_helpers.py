@@ -5,7 +5,7 @@ from typing import Any
 
 
 def safe_nfhs_value(v: Any) -> tuple[str, str]:
-    """Return (display_str, quality) — quality in {'certain','uncertain','suppressed','missing'}."""
+    """Return (display_str, quality) - quality in {'certain','uncertain','suppressed','missing'}."""
     if v is None:
         return ("N/A", "missing")
     s = str(v).strip()
@@ -123,8 +123,14 @@ def get_nfhs_display_rows(nfhs_row: dict) -> list[dict]:
     return result
 
 
-def data_source_label(data_mode: str) -> str:
+def data_source_label(
+    data_mode: str,
+    active_source: str | None = None,
+    fallback_reason: str | None = None,
+) -> str:
     """Human-readable data-source label for the app badge (no secrets)."""
+    if fallback_reason or active_source == "json_fallback":
+        return "Data source: Local sample JSON fallback after Unity Catalog load failure"
     if data_mode.lower().strip() == "uc":
         return "Data source: Unity Catalog trusted tables"
     return "Data source: Local sample JSON (Gate A)"
@@ -147,7 +153,7 @@ def ai_mode_label(claude_available: bool, claude_model: str) -> str:
 def preferred_district_index(district_names: list[str], recent_district_norm: str) -> int:
     """Return the best default selectbox index for the Program Leader Dashboard.
 
-    Priority: most-recent session district → Bangalore → first available.
+    Priority: most-recent session district -> Bangalore -> first available.
     """
     from .data_loader import get_district_alias
 

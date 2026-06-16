@@ -73,7 +73,7 @@ def test_between_as_full_condition():
 # --- pathway matching ---
 
 def test_demo_scenario_matched_pathways():
-    """PIN 560001: pregnant mother + 3-year-old → maternal_care + child_nutrition + women_preventive_screening."""
+    """PIN 560001: pregnant mother + 3-year-old -> maternal_care + child_nutrition + women_preventive_screening."""
     profile = {
         "pregnant": True,
         "recently_delivered": False,
@@ -91,7 +91,7 @@ def test_demo_scenario_matched_pathways():
     matched_ids = {pw["pathway_id"] for pw in matched}
     assert "maternal_care" in matched_ids
     assert "child_nutrition" in matched_ids
-    # 3-year-old is 36 months — outside the 0–35 immunization window
+    # 3-year-old is 36 months - outside the 0-35 immunization window
     assert "immunization" not in matched_ids
     assert "health_insurance_awareness" not in matched_ids
 

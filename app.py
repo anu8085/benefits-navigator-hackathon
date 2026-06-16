@@ -1,13 +1,13 @@
-"""BENEFITBRIDGE AI — Gate A local-only Streamlit app.
+"""BENEFITBRIDGE AI - Gate A local-only Streamlit app.
 
 Runs entirely on local sample JSON files + SQLite.
 No live Databricks / Unity Catalog / Lakebase connections in this gate.
 Claude API is used if ANTHROPIC_API_KEY is set; falls back to deterministic otherwise.
 
 Session flow:
-  Screen 1 (step=0) — original scenario input
-  Screen 2 (step=1) — follow-up questions + profile card + "Generate support plan"
-  Screen 3 (step=2) — matched pathways, action plan, NFHS indicators, facilities
+  Screen 1 (step=0) - original scenario input
+  Screen 2 (step=1) - follow-up questions + profile card + "Generate support plan"
+  Screen 3 (step=2) - matched pathways, action plan, NFHS indicators, facilities
 """
 from __future__ import annotations
 
@@ -15,10 +15,19 @@ import json
 
 import streamlit as st
 
-from src.config import CLAUDE_AVAILABLE, CLAUDE_MODEL, DATA_MODE, SAMPLE_DATA_DIR, STATE_STORE_MODE
+from src.config import (
+    CLAUDE_AVAILABLE,
+    CLAUDE_MODEL,
+    DATA_MODE,
+    SAMPLE_DATA_DIR,
+    STATE_STORE_MODE,
+    UC_CATALOG,
+    UC_SCHEMA,
+)
 from src.data_loader import (
     _load,
     _norm,
+    get_data_source_status,
     get_district_alias,
     get_district_for_pincode,
     get_facilities,
@@ -51,15 +60,14 @@ from src.ui_helpers import (
     state_store_label,
 )
 
-# ── Page config ──────────────────────────────────────────────────────────────
+# -- Page config --------------------------------------------------------------
 st.set_page_config(
     page_title="BenefitBridge AI",
-    page_icon="🌉",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
-# ── Session state init ───────────────────────────────────────────────────────
+# -- Session state init -------------------------------------------------------
 _STATE_DEFAULTS: dict = {
     "step": 0,
     "original_text": "",
@@ -84,55 +92,62 @@ for _k, _v in _STATE_DEFAULTS.items():
 
 store = StateStore()
 pathways = load_pathways()
+data_status = get_data_source_status()
 
-# ── Header ───────────────────────────────────────────────────────────────────
-st.title("🌉 BenefitBridge AI")
+# -- Header -------------------------------------------------------------------
+st.title("BenefitBridge AI")
 _badge = (
-    f"{data_source_label(DATA_MODE)}  ·  "
-    f"{state_store_label(STATE_STORE_MODE)}  ·  "
+    f"{data_source_label(DATA_MODE, data_status.get('active_source'), data_status.get('fallback_reason'))}  -  "
+    f"{state_store_label(STATE_STORE_MODE)}  -  "
     f"{ai_mode_label(CLAUDE_AVAILABLE, CLAUDE_MODEL)}"
 )
 st.caption(_badge)
 
 tab1, tab2, tab3 = st.tabs(
-    ["👪 Family Navigator", "📊 Program Leader Dashboard", "🔍 Data Trust / Debug"]
+    ["Family Navigator", "Program Leader Dashboard", "Data Trust / Debug"]
 )
 
-# ════════════════════════════════════════════════════════════════════════════
-# TAB 1 — FAMILY NAVIGATOR
-# ════════════════════════════════════════════════════════════════════════════
+# ============================================================================
+# TAB 1 - FAMILY NAVIGATOR
+# ============================================================================
 with tab1:
     step = st.session_state.step
 
-    # ── SCREEN 1: Scenario input ────────────────────────────────────────────
+    # -- SCREEN 1: Scenario input --------------------------------------------
     if step == 0:
         st.subheader("Tell us about your family")
+        st.caption("Describe your family's situation and health needs in your own words.")
 
-        scenarios = load_scenarios()
-        if scenarios:
-            st.write("**Quick-start demo scenarios:**")
-            demo_cols = st.columns(min(len(scenarios), 3))
-            for i, sc in enumerate(scenarios):
-                if demo_cols[i % 3].button(sc["title"][:55], key=f"demo_{i}"):
-                    st.session_state.original_text = sc["scenario_text"]
-                    st.rerun()
-
-        st.markdown("---")
         raw = st.text_area(
-            "Describe your family's situation and health needs:",
+            "Describe your family's situation and health needs",
             value=st.session_state.original_text,
-            height=130,
+            height=180,
             placeholder=(
                 "Example: I live in pincode 560001. I am pregnant and have a 3-year-old child. "
                 "I need help with nutrition and finding a nearby health facility."
             ),
         )
 
-        if st.button("Analyse My Family Profile", type="primary", disabled=not raw.strip()):
+        scenarios = load_scenarios()
+        if scenarios:
+            sample_labels = {
+                "scenario_maternal_nutrition": "Pregnant mother with young child",
+                "scenario_child_vaccination": "Parent with child needing vaccination",
+                "scenario_field_worker_district_risk": "Field worker reviewing district health risk",
+            }
+            with st.expander("Try a sample scenario", expanded=False):
+                demo_cols = st.columns(min(len(scenarios), 3))
+                for i, sc in enumerate(scenarios):
+                    label = sample_labels.get(sc.get("id"), sc.get("title", "Sample scenario"))
+                    if demo_cols[i % 3].button(label, key=f"demo_{i}"):
+                        st.session_state.original_text = sc["scenario_text"]
+                        st.rerun()
+
+        if st.button("Analyze My Family Profile", type="primary", disabled=not raw.strip()):
             spinner_msg = (
-                "Analysing your situation with Claude…"
+                "Analysing your situation with Claude..."
                 if CLAUDE_AVAILABLE
-                else "Extracting profile…"
+                else "Extracting profile..."
             )
             with st.spinner(spinner_msg):
                 base_profile, profile_trace = extract_profile_with_trace(raw.strip())
@@ -176,38 +191,38 @@ with tab1:
             st.session_state.step = 1
             st.rerun()
 
-    # ── SCREEN 2: Follow-up questions + profile card ─────────────────────────
+    # -- SCREEN 2: Follow-up questions + profile card -------------------------
     elif step == 1:
         base_profile: dict = st.session_state.base_profile
         questions: list[dict] = st.session_state.followup_questions
 
         st.subheader("A few quick questions to personalise your plan")
         st.caption(
-            "Answer 2–3 short questions so we can match the right support pathways for your family."
+            "Answer 2-3 short questions so we can match the right support pathways for your family."
         )
 
         with st.expander("Your original description", expanded=False):
             st.write(st.session_state.original_text)
 
-        # ── Follow-up form with profile card inside ──────────────────────────
+        # -- Follow-up form with profile card inside --------------------------
         form_answers: dict[str, str] = {}
         with st.form("followup_form"):
             for q in questions:
                 form_answers[q["id"]] = st.text_input(
                     q["question"],
                     key=f"fq_{q['id']}",
-                    placeholder=q.get("placeholder", "Type your answer here…"),
+                    placeholder=q.get("placeholder", "Type your answer here..."),
                 )
 
-            # ── Compact profile card (base_profile summary) ──────────────────
+            # -- Compact profile card (base_profile summary) ------------------
             st.markdown("---")
             st.markdown("**Profile used for matching**")
 
             _di = st.session_state.district_info
-            _pin = base_profile.get("pincode") or "—"
-            _dist = _di.get("district_norm", "") or "—"
+            _pin = base_profile.get("pincode") or "-"
+            _dist = _di.get("district_norm", "") or "-"
             _state_name = _di.get("state_norm", "")
-            _loc = f"{_dist}, {_state_name}".strip(", ") or "—"
+            _loc = f"{_dist}, {_state_name}".strip(", ") or "-"
 
             if base_profile.get("pregnant"):
                 _preg_str = "Pregnant"
@@ -231,14 +246,14 @@ with tab1:
                 _child_str = "No child under 5"
 
             _needs = base_profile.get("needs") or []
-            _needs_str = ", ".join(_needs) if _needs else "—"
+            _needs_str = ", ".join(_needs) if _needs else "-"
 
             _ins_parts = []
             if base_profile.get("uninsured") is True:
                 _ins_parts.append("No insurance (extracted)")
             if base_profile.get("low_income"):
                 _ins_parts.append("Low-cost need (extracted)")
-            _ins_str = " · ".join(_ins_parts) if _ins_parts else "Answer above to complete"
+            _ins_str = " - ".join(_ins_parts) if _ins_parts else "Answer above to complete"
 
             _travel_km = base_profile.get("travel_km")
             _travel_str = f"Up to {_travel_km} km" if _travel_km else "Answer above to complete"
@@ -265,10 +280,10 @@ with tab1:
             submitted = st.form_submit_button("Generate support plan", type="primary")
 
         if submitted:
-            # 1 — Parse free-text answers → structured updates
+            # 1 - Parse free-text answers -> structured updates
             followup_updates = parse_followup_answers(questions, form_answers)
 
-            # 2 — If pincode newly provided, look up district/NFHS/facilities
+            # 2 - If pincode newly provided, look up district/NFHS/facilities
             if "pincode" in followup_updates and not st.session_state.district_info:
                 _new_pin = followup_updates["pincode"]
                 _new_di = get_district_for_pincode(_new_pin) or {}
@@ -283,17 +298,17 @@ with tab1:
                         _new_pin, _new_di["district_norm"], _new_di["state_norm"]
                     )
 
-            # 3 — Merge base_profile + followup_updates → final_profile
+            # 3 - Merge base_profile + followup_updates -> final_profile
             final_profile = merge_profile(base_profile, followup_updates)
 
-            # 4 — Match pathways using final_profile (not base_profile)
+            # 4 - Match pathways using final_profile (not base_profile)
             matched = match_pathways(final_profile, pathways)
 
-            # 5 — Generate action plan
+            # 5 - Generate action plan
             spin_msg = (
-                "Generating your support plan with Claude…"
+                "Generating your support plan with Claude..."
                 if CLAUDE_AVAILABLE
-                else "Generating your support plan…"
+                else "Generating your support plan..."
             )
             with st.spinner(spin_msg):
                 plan_text, plan_method, action_trace = generate_action_plan_with_trace(
@@ -306,7 +321,7 @@ with tab1:
             agent_trace["action_plan"] = action_trace
             agent_trace["rules_engine"] = rules_engine_trace()
 
-            # 6 — Persist to SQLite with full lineage
+            # 6 - Persist to SQLite with full lineage
             _d = st.session_state.district_info
             session_id = store.save_session(
                 raw_text=st.session_state.original_text,
@@ -325,7 +340,7 @@ with tab1:
                 },
             )
 
-            # 7 — Commit to session state
+            # 7 - Commit to session state
             st.session_state.followup_answers = form_answers
             st.session_state.followup_updates = followup_updates
             st.session_state.final_profile = final_profile
@@ -338,11 +353,11 @@ with tab1:
             st.session_state.step = 2
             st.rerun()
 
-        if st.button("← Back"):
+        if st.button("Back"):
             st.session_state.step = 0
             st.rerun()
 
-    # ── SCREEN 3: Results ────────────────────────────────────────────────────
+    # -- SCREEN 3: Results ----------------------------------------------------
     elif step == 2:
         # Safe-failure guard: final_profile must exist
         if not st.session_state.final_profile:
@@ -350,7 +365,7 @@ with tab1:
                 "Please complete the follow-up questions first. "
                 "The results screen requires a completed profile."
             )
-            if st.button("Back to questions"):
+        if st.button("Back"):
                 st.session_state.step = 1
                 st.rerun()
         else:
@@ -457,7 +472,7 @@ with tab1:
             st.markdown("---")
             st.subheader("How helpful was this plan?")
             if st.session_state.feedback_submitted:
-                st.success("Thanks — your feedback was saved.")
+                st.success("Thanks - your feedback was saved.")
             else:
                 with st.form("screen3_feedback"):
                     rating = st.radio(
@@ -484,12 +499,12 @@ with tab1:
                 for key in list(_STATE_DEFAULTS.keys()):
                     st.session_state[key] = _STATE_DEFAULTS[key]
                 st.rerun()
-# ════════════════════════════════════════════════════════════════════════════
-# TAB 2 — PROGRAM LEADER DASHBOARD
-# ════════════════════════════════════════════════════════════════════════════
+# ============================================================================
+# TAB 2 - PROGRAM LEADER DASHBOARD
+# ============================================================================
 with tab2:
     st.subheader("Program Leader Dashboard")
-    st.caption("District health trends · pathway demand simulation · facility overview")
+    st.caption("District health trends - pathway demand simulation - facility overview")
 
     all_nfhs = _load("nfhs_5_district_health_indicators")
 
@@ -513,7 +528,7 @@ with tab2:
             )
 
             if sel_row:
-                st.write(f"**{selected_district}** — {sel_row.get('state_ut','').strip()}")
+                st.write(f"**{selected_district}** - {sel_row.get('state_ut','').strip()}")
 
                 indicators = get_nfhs_display_rows(sel_row)
                 certain = [i for i in indicators if i["quality"] == "certain"]
@@ -528,7 +543,7 @@ with tab2:
                     st.info("No numeric indicators available for this district.")
 
                 st.markdown("---")
-                st.markdown("#### Pathway Demand — Sample Scenario Simulation")
+                st.markdown("#### Pathway Demand - Sample Scenario Simulation")
                 st.caption("Based on 3 included demo scenarios (not real population data)")
 
                 scenarios = load_scenarios()
@@ -542,7 +557,7 @@ with tab2:
                 for pw in pathways:
                     name = pw.get("pathway_name", pw["pathway_id"])
                     count = demand[pw["pathway_id"]]
-                    bar = "█" * count + "░" * (len(scenarios) - count)
+                    bar = "#" * count + "." * (len(scenarios) - count)
                     st.write(f"**{name}**: {bar} {count}/{len(scenarios)}")
 
         st.markdown("---")
@@ -562,9 +577,9 @@ with tab2:
         else:
             st.info("No facilities data loaded.")
 
-# ════════════════════════════════════════════════════════════════════════════
-# TAB 3 — DATA TRUST / DEBUG PANEL
-# ════════════════════════════════════════════════════════════════════════════
+# ============================================================================
+# TAB 3 - DATA TRUST / DEBUG PANEL
+# ============================================================================
 with tab3:
     st.subheader("Data Trust / Debug Panel")
 
@@ -587,14 +602,39 @@ with tab3:
             else:
                 st.error(f"{name}  MISSING")
 
+    source_status = get_data_source_status()
+    st.markdown("#### Data Source Runtime")
+    st.write(f"**Configured data mode:** `{source_status.get('configured_mode', DATA_MODE)}`")
+    st.write(f"**Active source:** `{source_status.get('active_source', 'unknown')}`")
+    st.write(f"**Catalog / schema:** `{source_status.get('catalog', UC_CATALOG)}`.`{source_status.get('schema', UC_SCHEMA)}`")
+    if source_status.get("http_path_redacted"):
+        st.write(f"**SQL Warehouse HTTP path:** `{source_status['http_path_redacted']}`")
+    if source_status.get("fallback_reason"):
+        st.warning(source_status["fallback_reason"])
+
+    table_status = source_status.get("tables", {})
+    for table_name in [
+        "facilities",
+        "india_post_pincode_directory",
+        "pincode_district_lookup",
+        "nfhs_5_district_health_indicators",
+        "support_pathways",
+    ]:
+        status = table_status.get(table_name, {})
+        source = status.get("source", "not loaded")
+        count = status.get("row_count", 0)
+        st.write(f"`{table_name}`: {count} row(s), source `{source}`")
+        if status.get("fallback_reason"):
+            st.caption(f"Fallback reason: {status['fallback_reason']}")
+
     # AI mode
     st.markdown("---")
     st.markdown("#### AI Configuration")
     if CLAUDE_AVAILABLE:
-        st.success(f"Claude AI active — model: `{CLAUDE_MODEL}`")
+        st.success(f"Claude AI active - model: `{CLAUDE_MODEL}`")
     else:
         st.warning(
-            "Deterministic mode — `ANTHROPIC_API_KEY` not set. "
+            "Deterministic mode - `ANTHROPIC_API_KEY` not set. "
             "Copy `.env.example` to `.env` and add your key to enable Claude."
         )
 
@@ -621,11 +661,11 @@ with tab3:
     st.markdown("#### Profile Lineage Trace (current session)")
     if st.session_state.get("base_profile"):
         with st.expander("1. Original scenario (Screen 1)", expanded=False):
-            st.write(st.session_state.get("original_text") or "—")
+            st.write(st.session_state.get("original_text") or "-")
 
         with st.expander("2. Base profile extracted from Screen 1", expanded=False):
             st.write("**Needs detected:**")
-            st.write(", ".join(st.session_state.base_profile.get("needs") or []) or "—")
+            st.write(", ".join(st.session_state.base_profile.get("needs") or []) or "-")
             st.json(st.session_state.base_profile)
 
         _fq = st.session_state.get("followup_questions") or []
@@ -638,7 +678,7 @@ with tab3:
         if _fa:
             with st.expander("4. Follow-up answers (Screen 2)", expanded=False):
                 for _qid, _ans in _fa.items():
-                    st.write(f"**{_qid}:** {_ans or '—'}")
+                    st.write(f"**{_qid}:** {_ans or '-'}")
 
         _fu = st.session_state.get("followup_updates") or {}
         if _fu:
@@ -655,8 +695,8 @@ with tab3:
             with st.expander("7. Matched pathways (generated from final_profile)", expanded=False):
                 for _pw in _mp:
                     st.write(
-                        f"✅ **{_pw.get('pathway_name', _pw.get('pathway_id'))}**  "
-                        f"— trigger: `{_pw.get('trigger_condition', '')}`"
+                        f" **{_pw.get('pathway_name', _pw.get('pathway_id'))}**  "
+                        f"- trigger: `{_pw.get('trigger_condition', '')}`"
                     )
     else:
         st.info(
@@ -672,16 +712,16 @@ with tab3:
         if di:
             alias = get_district_alias(di["district_norm"])
             st.write(
-                f"Lookup → `district_norm={di['district_norm']}`, "
+                f"Lookup -> `district_norm={di['district_norm']}`, "
                 f"`state_norm={di['state_norm']}`, "
                 f"lat={di['lat']}, lon={di['lon']}"
             )
-            st.write(f"NFHS alias: `{di['district_norm']}` → `{alias}`")
+            st.write(f"NFHS alias: `{di['district_norm']}` -> `{alias}`")
             nfhs = get_nfhs_for_district(di["district_norm"], di["state_norm"])
             if nfhs:
                 match_label = "district match" if _norm(nfhs[0].get("district_name")) == alias else "state fallback"
                 st.success(
-                    f"NFHS: {len(nfhs)} row(s) found ({match_label}) — "
+                    f"NFHS: {len(nfhs)} row(s) found ({match_label}) - "
                     f"district_name=`{nfhs[0].get('district_name','').strip()}`"
                 )
             else:
@@ -697,9 +737,9 @@ with tab3:
         for s in sessions:
             pin_info = f"{s.get('district_norm','')} / {s.get('state_norm','')}"
             st.write(
-                f"`{s['id'][:8]}…`  {s['created_at']}  "
-                f"— {pin_info}  "
-                f"— plan: **{s.get('plan_method','?')}**"
+                f"`{s['id'][:8]}...`  {s['created_at']}  "
+                f"- {pin_info}  "
+                f"- plan: **{s.get('plan_method','?')}**"
             )
     else:
         st.write("No sessions recorded yet. Complete a Family Navigator query to create one.")
@@ -718,3 +758,4 @@ with tab3:
             st.caption(f"Showing 10 of {len(preview_rows)} rows.")
     else:
         st.warning(f"No data for `{preview_choice}`.")
+

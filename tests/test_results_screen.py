@@ -52,7 +52,59 @@ def test_feedback_section_text_exists_on_screen3():
     app_text = Path("app.py").read_text(encoding="utf-8")
     assert "How helpful was this plan?" in app_text
     assert "Submit feedback" in app_text
-    assert "Thanks — your feedback was saved." in app_text
+    assert "Thanks - your feedback was saved." in app_text
+
+
+def test_app_title_text_is_plain():
+    app_text = Path("app.py").read_text(encoding="utf-8")
+    assert 'st.title("BenefitBridge AI")' in app_text
+    assert "st.title(\"ð" not in app_text
+
+
+def test_tab_labels_are_plain_text():
+    app_text = Path("app.py").read_text(encoding="utf-8")
+    assert '["Family Navigator", "Program Leader Dashboard", "Data Trust / Debug"]' in app_text
+
+
+def test_user_facing_ui_text_has_no_mojibake_patterns():
+    app_text = Path("app.py").read_text(encoding="utf-8")
+    mojibake_patterns = (
+        chr(0x00F0) + chr(0x0178),
+        chr(0x00E2),
+        chr(0xFFFD),
+    )
+    for pattern in mojibake_patterns:
+        assert pattern not in app_text
+
+
+def test_feedback_labels_do_not_include_emojis():
+    app_text = Path("app.py").read_text(encoding="utf-8")
+    assert '["Helpful", "Somewhat helpful", "Not helpful"]' in app_text
+    assert f"{chr(0x2705)} Helpful" not in app_text
+    assert chr(0x00F0) not in app_text
+
+
+def test_screen1_custom_scenario_entry_comes_before_samples():
+    app_text = Path("app.py").read_text(encoding="utf-8")
+    text_area_idx = app_text.index("st.text_area(")
+    sample_expander_idx = app_text.index('st.expander("Try a sample scenario"')
+    assert text_area_idx < sample_expander_idx
+    assert "Quick-start demo scenarios" not in app_text
+
+
+def test_screen1_sample_scenarios_are_in_expander():
+    app_text = Path("app.py").read_text(encoding="utf-8")
+    assert 'st.expander("Try a sample scenario", expanded=False)' in app_text
+    assert "Pregnant mother with young child" in app_text
+    assert "Parent with child needing vaccination" in app_text
+    assert "Field worker reviewing district health risk" in app_text
+
+
+def test_screen1_main_button_label_and_empty_guard():
+    app_text = Path("app.py").read_text(encoding="utf-8")
+    assert '"Analyze My Family Profile"' in app_text
+    assert '"Analyse My Family Profile"' not in app_text
+    assert "disabled=not raw.strip()" in app_text
 
 
 def test_facility_card_public_text_hides_raw_list_strings_and_metadata():
