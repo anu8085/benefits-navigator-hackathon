@@ -65,3 +65,57 @@ def test_scenarios_loads():
     scenarios = load_scenarios()
     assert len(scenarios) >= 1
     assert "scenario_text" in scenarios[0]
+
+
+# -- Facility ranking ----------------------------------------------------------
+
+def test_rank_facilities_deprioritises_dental_for_maternal():
+    """Dental-only facility should rank below hospital when maternal pathways are matched."""
+    from src.data_loader import rank_facilities_for_pathways
+    facilities = [
+        {
+            "name": "Dental Lavelle",
+            "organization_type": "Dental Clinic",
+            "specialties": "Dentistry",
+            "address_zipOrPostcode": "560001",
+            "address_stateOrRegion": "KARNATAKA",
+            "officialPhone": "",
+        },
+        {
+            "name": "City General Hospital",
+            "organization_type": "Hospital",
+            "specialties": "General Medicine, Obstetrics",
+            "address_zipOrPostcode": "560001",
+            "address_stateOrRegion": "KARNATAKA",
+            "officialPhone": "080-12345678",
+        },
+        {
+            "name": "Child Health Clinic",
+            "organization_type": "Pediatric Clinic",
+            "specialties": "Pediatrics",
+            "address_zipOrPostcode": "560001",
+            "address_stateOrRegion": "KARNATAKA",
+            "officialPhone": "",
+        },
+    ]
+    ranked = rank_facilities_for_pathways(
+        facilities,
+        pathway_ids={"maternal_care", "child_nutrition"},
+        pincode="560001",
+        state_norm="KARNATAKA",
+    )
+    names = [f["name"] for f in ranked]
+    dental_idx = names.index("Dental Lavelle")
+    hospital_idx = names.index("City General Hospital")
+    assert hospital_idx < dental_idx, f"Hospital should rank above dental. Order: {names}"
+
+
+def test_rank_facilities_pincode_match_is_tier_0():
+    """Facilities with exact pincode match should always come before other-state facilities."""
+    from src.data_loader import rank_facilities_for_pathways
+    facilities = [
+        {"name": "Far Hospital", "address_zipOrPostcode": "110001", "address_stateOrRegion": "DELHI"},
+        {"name": "Local Clinic", "address_zipOrPostcode": "560001", "address_stateOrRegion": "KARNATAKA"},
+    ]
+    ranked = rank_facilities_for_pathways(facilities, pincode="560001", state_norm="KARNATAKA")
+    assert ranked[0]["name"] == "Local Clinic"

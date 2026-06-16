@@ -344,6 +344,79 @@ def get_facilities(pincode: str, district_norm: str, state_norm: str) -> list[di
     return sorted(rows, key=_sort_key)
 
 
+# Service keywords that indicate relevance for maternal/child/general health pathways
+_PRIORITY_SERVICE_KW = (
+    "hospital", "maternal", "obstetric", "gynecolog", "gynaecolog",
+    "pediatric", "paediatric", "child health", "neonat", "general medicine",
+    "general practice", "family medicine", "primary health", "medicine", "clinic",
+)
+_DEPRIORITY_SERVICE_KW = (
+    "dental", "dentist", "dentistry", "ophthalm", "optom", "optician",
+    "eye care", "eye clinic",
+)
+_MATERNAL_CHILD_PATHWAY_IDS = frozenset({"maternal_care", "child_nutrition", "immunization"})
+
+
+def _facility_service_score(facility: dict, pathway_ids: frozenset) -> int:
+    """Score a facility's service relevance. Higher = more relevant to the given pathways."""
+    combined = " ".join([
+        str(facility.get("organization_type", "")),
+        str(facility.get("specialties", "")),
+        str(facility.get("capability", "")),
+        str(facility.get("name", "")),
+    ]).lower()
+
+    needs_maternal_child = bool(pathway_ids & _MATERNAL_CHILD_PATHWAY_IDS)
+    score = 0
+
+    if any(kw in combined for kw in _PRIORITY_SERVICE_KW):
+        score += 2
+
+    if needs_maternal_child and any(
+        kw in combined for kw in (
+            "maternal", "obstetric", "gynecolog", "gynaecolog",
+            "pediatric", "paediatric", "child", "neonat",
+        )
+    ):
+        score += 3
+
+    if facility.get("officialPhone"):
+        score += 1
+
+    # Deprioritize dental/eye-only when the scenario is maternal/child
+    if needs_maternal_child or not pathway_ids:
+        has_priority = any(kw in combined for kw in _PRIORITY_SERVICE_KW)
+        is_specialty_only = any(kw in combined for kw in _DEPRIORITY_SERVICE_KW)
+        if is_specialty_only and not has_priority:
+            score -= 5
+
+    return score
+
+
+def rank_facilities_for_pathways(
+    facilities: list[dict],
+    pathway_ids: frozenset | set | None = None,
+    pincode: str = "",
+    state_norm: str = "",
+) -> list[dict]:
+    """Re-rank facilities: geographic tier preserved, then service relevance within tier."""
+    pids = frozenset(pathway_ids or [])
+    pin_norm = _norm(pincode)
+
+    def _key(r: dict) -> tuple:
+        z = _norm(r.get("address_zipOrPostcode"))
+        s = _norm(r.get("address_stateOrRegion"))
+        if pin_norm and z == pin_norm:
+            tier = 0
+        elif state_norm and s == state_norm:
+            tier = 1
+        else:
+            tier = 2
+        return (tier, -_facility_service_score(r, pids))
+
+    return sorted(facilities, key=_key)
+
+
 def get_district_alias(district_norm: str) -> str:
     return _DISTRICT_ALIAS.get(district_norm, district_norm)
 

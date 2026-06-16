@@ -36,6 +36,7 @@ from src.data_loader import (
     list_nfhs_districts,
     load_pathways,
     load_scenarios,
+    rank_facilities_for_pathways,
 )
 from src.bb_logging import (
     log_base_profile,
@@ -362,7 +363,15 @@ with tab1:
             # 4 - Match pathways using final_profile (not base_profile)
             matched = match_pathways(final_profile, pathways)
             log_matched_pathways(matched)
-            log_facilities_selected(st.session_state.facilities_list)
+            # Re-rank facilities for the matched pathways (deprioritise dental/eye-only)
+            _ranked = rank_facilities_for_pathways(
+                st.session_state.facilities_list,
+                pathway_ids={pw.get("pathway_id") for pw in matched},
+                pincode=final_profile.get("pincode", ""),
+                state_norm=st.session_state.district_info.get("state_norm", ""),
+            )
+            st.session_state.facilities_list = _ranked
+            log_facilities_selected(_ranked)
             log_district_context(st.session_state.get("nfhs_lookup_trace") or {})
 
             # 5 - Generate action plan
@@ -623,7 +632,8 @@ with tab2:
                     st.write(f"**{name}**: {bar} {count}/{len(scenarios)}")
 
         st.markdown("---")
-        st.markdown("#### Facility Coverage (sample_data)")
+        _fac_src = "Unity Catalog trusted data" if data_status.get("active_source") == "uc" else "active data source"
+        st.markdown(f"#### Facility Coverage ({_fac_src})")
         all_facilities = _load("facilities")
         if all_facilities:
             total = len(all_facilities)
@@ -646,7 +656,7 @@ with tab3:
     st.subheader("Data Trust / Debug Panel")
 
     # Source file status
-    st.markdown("#### Sample Data Sources")
+    st.markdown("#### Data Source Status")
     source_files = [
         "facilities",
         "india_post_pincode_directory",
@@ -839,14 +849,14 @@ with tab3:
 
     # Raw data preview
     st.markdown("---")
-    st.markdown("#### Sample Data Preview")
+    st.markdown("#### Trusted Data Preview")
     preview_choice = st.selectbox("File to preview:", source_files, key="debug_file")
     preview_rows = _load(preview_choice)
     if preview_rows:
         import pandas as pd
 
         df = pd.DataFrame(preview_rows[:10])
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df, width="stretch")
         if len(preview_rows) > 10:
             st.caption(f"Showing 10 of {len(preview_rows)} rows.")
     else:

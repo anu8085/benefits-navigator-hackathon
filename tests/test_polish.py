@@ -311,3 +311,52 @@ def test_gate_bc_full_badge():
     assert "Unity Catalog trusted tables" in badge
     assert "Lakebase" in badge
     assert "Claude Sonnet" in badge
+
+
+# -- 8. Action-plan Claude context cap -----------------------------------------
+
+def test_build_facility_lines_shows_5():
+    """_build_facility_lines must include facility names from the provided list."""
+    from src.action_plan import _build_facility_lines
+    facs = [{"name": f"Facility {i}", "address_city": "Bangalore", "officialPhone": "080-999"} for i in range(5)]
+    result = _build_facility_lines(facs)
+    assert "Top 5 nearby facilities" in result
+    for i in range(5):
+        assert f"Facility {i}" in result
+
+
+def test_build_facility_lines_empty_returns_no_data():
+    from src.action_plan import _build_facility_lines
+    assert "No facilities" in _build_facility_lines([])
+
+
+def test_action_plan_no_thinking_parameter():
+    """generate_action_plan_with_trace must not use thinking=adaptive (unsupported on Sonnet 4.5)."""
+    import inspect
+    from src.action_plan import generate_action_plan_with_trace
+    src = inspect.getsource(generate_action_plan_with_trace)
+    assert "thinking" not in src, "thinking parameter must be removed (BadRequestError on Sonnet 4.5)"
+
+
+# -- 9. UI label cleanup -------------------------------------------------------
+
+def test_app_no_sample_data_preview_label():
+    """'Sample Data Preview' section header must be renamed to 'Trusted Data Preview'."""
+    from pathlib import Path
+    src = Path("app.py").read_text(encoding="utf-8")
+    assert "#### Trusted Data Preview" in src
+    assert "#### Sample Data Preview" not in src
+
+
+def test_app_no_sample_data_sources_label():
+    """'Sample Data Sources' header must be renamed (Trusted Data Sources already exists)."""
+    from pathlib import Path
+    src = Path("app.py").read_text(encoding="utf-8")
+    assert "#### Sample Data Sources" not in src
+
+
+def test_app_facility_coverage_label_is_dynamic():
+    """Facility Coverage label in Program Leader Dashboard must not hard-code 'sample_data'."""
+    from pathlib import Path
+    src = Path("app.py").read_text(encoding="utf-8")
+    assert "Facility Coverage (sample_data)" not in src

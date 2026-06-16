@@ -31,6 +31,32 @@ GROUNDING RULES - follow strictly:
 - When uncertain about a specific service say: "Ask your local health worker or facility."
 """
 
+_MAX_CLAUDE_FACILITIES = 5
+
+
+def _build_facility_lines(facilities: list[dict]) -> str:
+    """Return a compact facility summary string for the Claude prompt."""
+    if not facilities:
+        return "No facilities in local dataset\n"
+    lines = f"Top {len(facilities)} nearby facilities:\n"
+    for i, f in enumerate(facilities, 1):
+        name = f.get("name", "Unknown facility")
+        parts: list[str] = [name]
+        addr = ", ".join(x for x in [
+            f.get("address_line1", ""),
+            f.get("address_city", ""),
+            f.get("address_stateOrRegion", ""),
+            f.get("address_zipOrPostcode", ""),
+        ] if x)
+        if addr:
+            parts.append(addr)
+        phone = f.get("officialPhone", "")
+        if phone:
+            parts.append(f"Phone: {phone}")
+        lines += f"  {i}. {' | '.join(parts)}\n"
+    return lines
+
+
 _NFHS_DISPLAY_COLS = [
     ("institutional_birth_5y_pct", "Institutional births"),
     ("mothers_who_had_at_least_4_anc_visits_lb5y_pct", "4+ ANC visits"),
@@ -108,7 +134,9 @@ def generate_action_plan_with_trace(
     followup_answers: dict | None = None,
 ) -> tuple[str, str, dict]:
     """Return (plan_text, method, trace)."""
-    log_action_plan_input(profile, matched_pathways, nfhs_rows, facilities, followup_answers)
+    # Cap facilities before logging and before sending to Claude
+    top_facilities = facilities[:_MAX_CLAUDE_FACILITIES]
+    log_action_plan_input(profile, matched_pathways, nfhs_rows, top_facilities, followup_answers)
     trace = {
         "provider": "deterministic",
         "model": None,
@@ -140,11 +168,7 @@ def generate_action_plan_with_trace(
                     if v and v not in ("NA", "*", "nan", ""):
                         nfhs_lines += f"  {label}: {v}%\n"
 
-            fac_lines = (
-                f"{min(len(facilities), 5)} nearby facilities are listed separately below.\n"
-                if facilities
-                else "No facilities in local dataset\n"
-            )
+            fac_lines = _build_facility_lines(top_facilities)
 
             followup_lines = ""
             if followup_answers:
@@ -161,7 +185,7 @@ def generate_action_plan_with_trace(
                 f"uninsured={profile.get('uninsured')}\n\n"
                 f"Matched support pathways:\n{pathway_lines}\n"
                 f"District health context (NFHS-5):\n{nfhs_lines or 'No data available'}\n"
-                f"Nearby facility section:\n{fac_lines}\n"
+                f"Nearby facilities:\n{fac_lines}\n"
                 f"{followup_lines}"
                 "Generate a numbered action plan for this family."
             )
@@ -170,7 +194,6 @@ def generate_action_plan_with_trace(
             response = client.messages.create(
                 model=CLAUDE_MODEL,
                 max_tokens=900,
-                thinking={"type": "adaptive"},
                 system=_PLAN_SYSTEM,
                 messages=[{"role": "user", "content": user_msg}],
             )

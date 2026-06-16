@@ -535,3 +535,49 @@ def test_full_demo_lineage():
 
     # base_profile not mutated
     assert base_profile["uninsured"] is None
+
+
+# -- New: broad-scenario and urgency tests ------------------------------------
+
+def test_broad_scenario_with_immunization_asks_cost_travel_urgency():
+    """Broad scenario (pregnant + nutrition + vaccination) must ask cost/travel/urgency."""
+    from src.followup import _deterministic_questions
+    profile = {
+        "pincode": "560001",
+        "pregnant": True,
+        "child_under_5": True,
+        "nutrition_need": True,
+        "immunization_need": True,   # vaccination mentioned but scenario is broad
+        "facility_search": True,
+    }
+    raw = (
+        "I am pregnant and have a 3-year-old child. I do not know where to go for "
+        "affordable health services. I need help with nutrition, vaccination, and "
+        "finding a nearby facility."
+    )
+    questions = _deterministic_questions(profile, raw)
+    ids = [q["id"] for q in questions]
+    assert "insurance" in ids, f"Broad scenario should ask insurance/cost, got: {ids}"
+    assert "travel_distance" in ids, f"Broad scenario should ask travel, got: {ids}"
+    assert "urgency" in ids, f"Broad scenario should ask urgency, got: {ids}"
+    assert "immunization_timing" not in ids, (
+        f"Vaccination-specific question should not dominate broad scenario, got: {ids}"
+    )
+
+
+def test_urgent_today_not_emergency_is_urgent():
+    """'urgent today but not an emergency' should parse as urgency=urgent, not routine."""
+    from src.followup import parse_followup_answers
+    q = [{"id": "urgency", "type": "text", "options": [], "question": "?", "placeholder": ""}]
+    result = parse_followup_answers(q, {"urgency": "urgent today but not an emergency"})
+    assert result.get("urgency") == "urgent"
+    assert result.get("urgency") != "routine"
+
+
+def test_up_to_km_parses_travel_range():
+    """'Up to 7 km' and 'within 3 km' should parse any numeric km distance."""
+    from src.followup import parse_followup_answers
+    q = [{"id": "travel_distance", "type": "text", "options": [], "question": "?", "placeholder": ""}]
+    assert parse_followup_answers(q, {"travel_distance": "Up to 7 km"}).get("travel_km") == 7
+    assert parse_followup_answers(q, {"travel_distance": "within 3 km"}).get("travel_km") == 3
+    assert parse_followup_answers(q, {"travel_distance": "15 kilometers"}).get("travel_km") == 15
