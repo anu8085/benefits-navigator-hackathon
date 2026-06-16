@@ -61,7 +61,7 @@ from src.followup import (
 from src.rules_engine import _eval_condition, match_pathways
 from src.action_plan import generate_action_plan_with_trace
 from src.agent_trace import empty_agent_trace, rules_engine_trace, step_display_label
-from src.state_store import StateStore
+from src.state_store import StateStore, get_state_store
 from src.ui_helpers import (
     ai_mode_label,
     badge_ai_label,
@@ -115,7 +115,7 @@ for _k, _v in _STATE_DEFAULTS.items():
     if _k not in st.session_state:
         st.session_state[_k] = _v
 
-store = StateStore()
+store = get_state_store()
 pathways = load_pathways()
 data_status = get_data_source_status()
 

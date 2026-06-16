@@ -1,0 +1,41 @@
+bundle:
+  name: trustroute-ai
+
+workspace:
+  host: https://dbc-30b128b6-0c37.cloud.databricks.com
+
+targets:
+  hackathon-free:
+    default: true
+
+resources:
+  apps:
+    trustroute-ai:
+      name: trustroute-ai
+      source_code_path: ${workspace.root_path}/files
+      resources:
+        - name: lakebase-state
+          postgres:
+            branch: projects/trustroute-ai-lakebase/branches/production
+            database: projects/trustroute-ai-lakebase/branches/production/databases/databricks-postgres
+            permission: CAN_CONNECT_AND_CREATE
+        - name: anthropic-api-key
+          secret:
+            key: anthropic-api-key
+            permission: READ
+            scope: trustroute-ai
+        - name: databricks-token
+          secret:
+            key: databricks-token
+            permission: READ
+            scope: trustroute-ai
+        - name: lakebase-user
+          secret:
+            key: lakebase-user
+            permission: READ
+            scope: trustroute-ai
+        - name: lakebase-password
+          secret:
+            key: lakebase-password
+            permission: READ
+            scope: trustroute-ai

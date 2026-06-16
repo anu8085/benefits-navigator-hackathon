@@ -1,57 +1,93 @@
-# 🧭 BENEFITBRIDGE AI — Health & Family Support Navigator
+# TrustRoute AI — Evidence-Backed Care Referral Navigator
 
-> **Databricks Apps & Agents for Good Hackathon**
-> An AI-powered public-health and family-support navigator that helps families, caregivers, and field workers understand local health context, find relevant facilities, and receive a clear action plan grounded in trusted data.
+> **Databricks Apps & Agents for Good Hackathon — Final Submission**  
+> TrustRoute AI helps community health workers, NGO coordinators, and family-support teams route families to trusted health support using Unity Catalog data, Claude Sonnet, deterministic rules, facility trust signals, and Lakebase state persistence.
+
+---
+
+## Project summary
+
+**TrustRoute AI** is a Databricks App that turns a plain-language family situation into:
+
+- a structured family / care profile
+- smart follow-up questions
+- matched public-health support pathways
+- nearby facility options with trust signals
+- an evidence-aware support plan
+- saved follow-up actions for field workers
+- program-level analytics for leaders
+
+The app is informational and referral-oriented. It does **not** provide medical diagnosis, legal advice, or final eligibility determination. It helps a field worker decide what to check next and which facility to call or visit.
+
+---
+
+## Hackathon positioning
+
+**Primary workflow:** Referral Navigator / field-worker copilot  
+**Supporting strength:** Facility trust and evidence review  
+**Technical emphasis:** Databricks Apps, Unity Catalog, Lakebase, Databricks SQL Warehouse, Claude Sonnet, deterministic rules, evidence and uncertainty handling
+
+TrustRoute AI is designed for the **Databricks Apps & Agents for Good Hackathon**. The core user is a non-technical field worker helping a family find trusted local health support.
 
 ---
 
 ## What it does
 
 1. A family or field worker describes a situation in plain language.
-2. **Claude** extracts a structured profile and asks clarifying questions when needed.
+2. **Claude Sonnet** extracts a structured profile and asks follow-up questions when needed.
 3. The app resolves location using **India PIN code geography**.
 4. The app enriches the situation with **NFHS-5 district-level health indicators**.
-5. A **deterministic rules engine** matches the user to support pathways such as maternal care, child nutrition, immunization, health-insurance awareness, household health risk, and women preventive screening.
-6. The app recommends relevant healthcare facilities from trusted facility data.
-7. **Claude** writes a warm, grounded action plan based only on retrieved data and matched pathways.
-8. Intake, pathway matches, recommended facilities, action plans, and feedback are persisted for analytics.
-
-This app is informational and referral-oriented. It does **not** provide medical diagnosis, legal advice, or final eligibility determination.
+5. A deterministic rules engine matches the family to support pathways such as maternal care, child nutrition, immunization, health-insurance awareness, household health risk, and women preventive screening.
+6. The app recommends nearby healthcare facilities from trusted facility data.
+7. Facility cards show trust signals, score source, evidence details, and uncertainty notes.
+8. **Claude Sonnet** writes a grounded support plan based on the profile, matched pathways, facility context, and retrieved data.
+9. Sessions, feedback, and saved facilities are persisted in **Lakebase** for the deployed app.
+10. A Program Leader Dashboard summarizes demand trends, facility coverage, and district health context.
 
 ---
 
 ## Core demo scenario
 
 ```text
-I live in pincode 560001. I am pregnant and have a 3-year-old child. 
-I do not know where to go for affordable health services. 
+I live in pincode 560001. I am pregnant and have a 3-year-old child.
+I do not know where to go for affordable health services.
 I need help with nutrition, vaccination, and finding a nearby facility.
+```
+
+Recommended follow-up answers for the demo:
+
+```text
+I currently do not have health insurance and need low-cost care.
+Up to 4 km.
+It is urgent today, but not an emergency.
 ```
 
 Expected result:
 
-* PIN code resolves to **BENGALURU URBAN / KARNATAKA**
-* NFHS context finds **Bangalore / Karnataka** or uses state fallback
-* Support pathways include maternal care, child nutrition, and immunization
-* Facilities are recommended from Karnataka sample data
-* Action plan is generated
-* SQLite save succeeds in local mode
-* Program Leader Dashboard reflects the saved local intake
+- PIN code resolves to **BENGALURU URBAN / KARNATAKA**
+- NFHS context matches **Bangalore / Karnataka** through alias handling
+- Support pathways include maternal care, child nutrition, child immunization, health-insurance / low-cost care, and preventive screening where applicable
+- Nearby facilities are ranked and shown with trust signals
+- The support plan is generated by **Claude Sonnet**
+- Facility shortlists and feedback persist in **Lakebase** in deployed mode
+- Program Leader Dashboard reflects trusted Unity Catalog data
 
 ---
 
 ## Architecture
 
-| Layer               | Technology                                                      |
-| ------------------- | --------------------------------------------------------------- |
-| UI / app host       | Python **Streamlit**                                            |
-| Final cloud host    | **Databricks Apps**                                             |
-| AI reasoning        | **Anthropic Claude**                                            |
-| Trusted data        | **Unity Catalog** Delta tables via **Databricks SQL Warehouse** |
-| Matching logic      | Deterministic rules engine                                      |
-| Local app state     | **SQLite**                                                      |
-| Final app state     | **Lakebase** / managed Postgres                                 |
-| Local fallback data | JSON files in `sample_data/`                                    |
+| Layer | Technology |
+|---|---|
+| UI / app host | Python **Streamlit** running as a **Databricks App** |
+| AI reasoning | **Claude Sonnet** through Anthropic API |
+| Trusted data | **Unity Catalog** Delta tables |
+| Query layer | **Databricks SQL Warehouse** |
+| Matching logic | Deterministic rules engine |
+| Facility scoring | Unity Catalog `facility_trust_scores` + proxy evidence scoring fallback |
+| Final app state | **Lakebase** / managed Postgres |
+| Local fallback state | **SQLite** |
+| Local fallback data | JSON files in `sample_data/` |
+| Analytics | Program Leader Dashboard + Data Trust / Debug panel |
 
 ---
 
@@ -72,17 +108,70 @@ benefits_navigator.trusted.india_post_pincode_directory
 benefits_navigator.trusted.pincode_district_lookup
 benefits_navigator.trusted.nfhs_5_district_health_indicators
 benefits_navigator.trusted.support_pathways
+benefits_navigator.trusted.facility_trust_scores
 ```
 
 ### Table purpose
 
-| Table                               | Purpose                                            |
-| ----------------------------------- | -------------------------------------------------- |
-| `facilities`                        | Healthcare facility and service-provider directory |
-| `india_post_pincode_directory`      | India Post PIN code geography source               |
-| `pincode_district_lookup`           | Derived PIN-to-district/state lookup               |
-| `nfhs_5_district_health_indicators` | District-level public-health context               |
-| `support_pathways`                  | Deterministic support-pathway rules                |
+| Table | Purpose |
+|---|---|
+| `facilities` | Healthcare facility and service-provider directory |
+| `india_post_pincode_directory` | India Post PIN code geography source |
+| `pincode_district_lookup` | Derived PIN-to-district/state lookup |
+| `nfhs_5_district_health_indicators` | District-level public-health context |
+| `support_pathways` | Deterministic support-pathway rules |
+| `facility_trust_scores` | Facility evidence / trust signal scoring input |
+
+---
+
+## Lakebase state store
+
+In deployed mode, TrustRoute AI uses **Lakebase** as a managed Postgres state store.
+
+Lakebase project/database used for deployment:
+
+```text
+Project: trustroute-ai-lakebase
+Database: databricks_postgres
+```
+
+App-created tables:
+
+```text
+app_sessions
+app_feedback
+facility_shortlists
+```
+
+These tables are created automatically with `CREATE TABLE IF NOT EXISTS`. They should not be manually created unless troubleshooting a deployment failure.
+
+### Lakebase table purpose
+
+| Table | Purpose |
+|---|---|
+| `app_sessions` | Stores family intake profile, matched pathways, and session metadata |
+| `app_feedback` | Stores user feedback from the app |
+| `facility_shortlists` | Stores facilities saved for follow-up, including trust score fields |
+
+---
+
+## Facility trust signals
+
+TrustRoute AI does not simply list facilities. It explains why a facility is shown and how strong the available evidence is.
+
+Facility cards include:
+
+- Trust signal
+- Score
+- Score source
+- Match reason
+- Location evidence
+- Contact evidence
+- Services / specialties
+- Uncertainty note
+- Save for follow-up action
+
+The trust signal reflects available evidence and data completeness. It is **not** a guarantee of clinical quality, safety, or current service availability. Users are instructed to call and confirm before visiting.
 
 ---
 
@@ -90,14 +179,14 @@ benefits_navigator.trusted.support_pathways
 
 The app intentionally handles real-world public-data issues:
 
-* PIN code and district mappings can be ambiguous.
-* Facility coordinates may be missing or contain `"NA"` string values.
-* NFHS values may contain suppressed values such as `*`, unavailable values such as `NA`, or parenthesized estimates such as `(29.5)`.
-* District names differ across datasets. For example:
-
-   * PIN lookup: `BENGALURU URBAN`
-   * NFHS: `Bangalore`
-* The app uses normalization, alias handling, and state fallback instead of assuming exact string matches.
+- PIN code and district mappings can be ambiguous.
+- Facility coordinates may be missing or contain string values such as `"NA"`.
+- NFHS values may contain suppressed values such as `*`, unavailable values such as `NA`, or parenthesized estimates such as `(29.5)`.
+- District names differ across datasets. Example:
+  - PIN lookup: `BENGALURU URBAN`
+  - NFHS: `Bangalore`
+- Facility records may have incomplete contact or service information.
+- The app uses normalization, alias handling, source-status reporting, and uncertainty notes rather than assuming exact matches.
 
 ---
 
@@ -105,15 +194,19 @@ The app intentionally handles real-world public-data issues:
 
 ```text
 app.py                              Streamlit UI + orchestration
+app.yaml                            Databricks App runtime and resource env configuration
+
+assets/
+  benefitbridge_logo.svg             Route-themed TrustRoute AI logo asset
 
 src/
   config.py                         Environment/config handling
-  data_loader.py                    Local JSON loading and row-count validation
-  profile_extractor.py              Scenario parsing and profile extraction
+  data_loader.py                    Unity Catalog and local fallback data loading
+  profile_extractor.py              Scenario parsing and Claude profile extraction
   rules_engine.py                   Deterministic support-pathway matching
-  action_plan.py                    Claude and deterministic fallback action plan
-  state_store.py                    SQLite local state persistence
-  ui_helpers.py                     Shared UI helpers and badges
+  action_plan.py                    Claude and deterministic fallback support plan
+  state_store.py                    SQLite + Lakebase state persistence
+  ui_helpers.py                     Shared UI helpers, trust signals, labels, and badges
 
 sample_data/
   facilities.json
@@ -125,11 +218,17 @@ sample_data/
 
 scripts/
   export_sample_data.py             Read-only Unity Catalog sample exporter
+  smoke_test_uc.py                  Unity Catalog smoke test
+  smoke_test_lakebase.py            Lakebase connection and persistence smoke test
 
 tests/
   test_data_loader.py
   test_rules_engine.py
   test_profile_extractor.py
+  test_results_screen.py
+  test_screen1_ui.py
+  test_polish.py
+  test_state_store_lakebase.py
 
 .local_state/                       Local SQLite DB folder, git-ignored
 
@@ -167,54 +266,6 @@ New-Item -ItemType Directory -Force .local_state | Out-Null
 
 ---
 
-## Export local sample JSON from Unity Catalog
-
-Use this only if `sample_data/*.json` files are missing or need refresh.
-
-Set environment variables in PowerShell. Do **not** commit secrets.
-
-```powershell
-$env:DATABRICKS_CONFIG_PROFILE="hackathon-free"
-$env:DATABRICKS_HOST="https://dbc-30b128b6-0c37.cloud.databricks.com"
-$env:DATABRICKS_SERVER_HOSTNAME="dbc-30b128b6-0c37.cloud.databricks.com"
-$env:DATABRICKS_HTTP_PATH="/sql/1.0/warehouses/81c2d8e2b863208b"
-$env:DATABRICKS_TOKEN="<your_databricks_token>"
-
-$env:UC_CATALOG="benefits_navigator"
-$env:UC_SCHEMA="trusted"
-$env:SQL_WAREHOUSE_NAME="Serverless Starter"
-```
-
-Run exporter:
-
-```powershell
-python scripts/export_sample_data.py
-```
-
-Or use the CLI profile path:
-
-```powershell
-python scripts/export_sample_data.py --profile hackathon-free --warehouse 81c2d8e2b863208b
-```
-
-Expected output:
-
-```text
-wrote facilities.json
-wrote india_post_pincode_directory.json
-wrote pincode_district_lookup.json
-wrote nfhs_5_district_health_indicators.json
-wrote support_pathways.json
-```
-
-Validate sample files:
-
-```powershell
-Get-ChildItem .\sample_data\*.json
-```
-
----
-
 ## Run locally — Gate A: JSON + SQLite
 
 Use local JSON files and SQLite only.
@@ -243,22 +294,146 @@ http://localhost:8501
 
 ---
 
-## Local test checklist
+## Run locally — Gate B: Unity Catalog + SQLite
 
-Gate A passes when:
+Use Unity Catalog trusted data but keep SQLite for local state.
 
-* Streamlit app starts locally.
-* Local JSON files load successfully.
-* App does not require Unity Catalog during launch.
-* App does not require Lakebase.
-* PIN code `560001` resolves to Bengaluru/Karnataka context.
-* NFHS district context appears using alias or state fallback.
-* Support pathways are matched deterministically.
-* Facilities are recommended.
-* Claude action plan is generated, or deterministic fallback works if Anthropic key is missing.
-* SQLite save succeeds.
-* Program Leader Dashboard reflects saved local intake.
-* No secrets are printed or committed.
+```powershell
+$env:DATABRICKS_CONFIG_PROFILE="hackathon-free"
+$env:DATABRICKS_HOST="https://dbc-30b128b6-0c37.cloud.databricks.com"
+$env:DATABRICKS_SERVER_HOSTNAME="dbc-30b128b6-0c37.cloud.databricks.com"
+$env:DATABRICKS_HTTP_PATH="/sql/1.0/warehouses/81c2d8e2b863208b"
+$env:DATABRICKS_TOKEN="<your_databricks_token>"
+
+$env:UC_CATALOG="benefits_navigator"
+$env:UC_SCHEMA="trusted"
+
+$env:BENEFITBRIDGE_DATA_MODE="uc"
+$env:BENEFITS_DATA_MODE="uc"
+
+$env:STATE_STORE_MODE="sqlite"
+$env:LOCAL_SQLITE_PATH=".local_state\benefitbridge_local.db"
+
+$env:ANTHROPIC_API_KEY="<your_anthropic_api_key>"
+$env:CLAUDE_MODEL="claude-sonnet-4-5-20250929"
+
+$env:SHOW_LOCAL_STATE_DEBUG="true"
+
+streamlit run app.py
+```
+
+---
+
+## Final deployed mode — Gate C: Databricks App + Unity Catalog + Lakebase
+
+Final deployed configuration:
+
+```text
+Databricks App: trustroute-ai
+Data: Unity Catalog
+State: Lakebase
+AI: Claude Sonnet
+```
+
+Required Databricks secret scope / app secrets:
+
+```text
+Scope: trustroute-ai
+
+anthropic-api-key
+databricks-token
+lakebase-user
+lakebase-password
+```
+
+Required Databricks App resources:
+
+```text
+lakebase-state
+anthropic-api-key
+databricks-token
+lakebase-user
+lakebase-password
+```
+
+Required app environment behavior:
+
+```text
+STATE_STORE_MODE=lakebase
+BENEFITBRIDGE_DATA_MODE=uc
+BENEFITS_DATA_MODE=uc
+UC_CATALOG=benefits_navigator
+UC_SCHEMA=trusted
+CLAUDE_MODEL=claude-sonnet-4-5-20250929
+```
+
+`app.yaml` should not contain secret values. It should only reference resources/secrets.
+
+---
+
+## Validation commands
+
+Run before deployment:
+
+```powershell
+python -m compileall .
+python -m pytest tests -q
+python scripts/smoke_test_uc.py
+```
+
+Run when Lakebase environment variables are available:
+
+```powershell
+python scripts/smoke_test_lakebase.py
+```
+
+Expected behavior:
+
+- Unit tests pass
+- Unity Catalog smoke test succeeds
+- Lakebase smoke test either succeeds or clearly skips if Lakebase env vars are only injected inside Databricks App runtime
+- No secrets are printed
+
+---
+
+## Final demo checklist
+
+Use this scenario:
+
+```text
+I live in pincode 560001. I am pregnant and have a 3-year-old child.
+I do not know where to go for affordable health services.
+I need help with nutrition, vaccination, and finding a nearby facility.
+```
+
+Use these follow-up answers:
+
+```text
+I currently do not have health insurance and need low-cost care.
+Up to 4 km.
+It is urgent today, but not an emergency.
+```
+
+Check the app:
+
+```text
+Data: Unity Catalog
+State: Lakebase
+AI: Claude Sonnet
+```
+
+Then verify:
+
+- Screen 1: TrustRoute AI branding appears
+- Screen 2: follow-up questions and routing profile work
+- Screen 3: Personalized Support Plan is generated by Claude Sonnet
+- Nearby Health Facilities appears once
+- Facility cards show trust signals
+- Facility evidence includes uncertainty notes
+- Save for follow-up works
+- Feedback works
+- Data Trust / Debug shows Unity Catalog and Lakebase status
+- Program Leader Dashboard shows Unity Catalog trusted data
 
 ---
 
@@ -278,13 +453,22 @@ __pycache__/
 
 Secrets must be provided through environment variables or Databricks App secrets.
 
-If a Databricks PAT or Anthropic API key is accidentally pasted into chat, logs, or a file, rotate it immediately.
+Never commit or print:
+
+```text
+ANTHROPIC_API_KEY
+DATABRICKS_TOKEN
+Lakebase passwords
+Connection strings with credentials
+```
+
+If a Databricks PAT, Anthropic API key, or Lakebase password is accidentally pasted into chat, logs, or a file, rotate it immediately.
 
 ---
 
-## Final deployment path
+## Deployment notes
 
-The planned progression is:
+The final deployment path is:
 
 ```text
 Gate A: Local JSON + SQLite
@@ -292,18 +476,31 @@ Gate B: Unity Catalog trusted data + SQLite
 Gate C: Databricks App + Unity Catalog + Lakebase
 ```
 
-Do not move to Gate B or Gate C until Gate A passes end-to-end.
+For final hackathon submission, use **Gate C**.
+
+Expected final state:
+
+```text
+TrustRoute AI running as a Databricks App
+Unity Catalog trusted data active
+Lakebase state store active
+Claude Sonnet action plan active
+Facility trust scoring visible
+Feedback and shortlists persisted
+```
 
 ---
 
-## Submission positioning
+## Submission summary
 
-**BENEFITBRIDGE AI** is an AI-powered public-health and family-support navigator that combines family needs, trusted healthcare facility data, postal geography, and district-level health indicators to recommend practical next steps for families and visibility for program leaders.
+**TrustRoute AI** is an evidence-backed care referral navigator for community health workers and family-support teams. It combines plain-language intake, Claude Sonnet, deterministic public-health rules, trusted Unity Catalog data, facility trust signals, and Lakebase persistence to help families move from uncertainty to practical next steps.
 
-It is built to be:
+The app is designed to be:
 
-* grounded in trusted data
-* compassionate for families
-* explainable for judges
-* useful for program leaders
-* resilient through local and cloud fallbacks
+- grounded in trusted data
+- compassionate for families
+- useful for field workers
+- explainable for judges
+- transparent about uncertainty
+- informative for program leaders
+- deployable on Databricks Apps with Lakebase state persistence
