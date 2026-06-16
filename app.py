@@ -32,9 +32,19 @@ from src.data_loader import (
     get_district_for_pincode,
     get_facilities,
     get_nfhs_for_district,
+    get_nfhs_lookup_trace,
     list_nfhs_districts,
     load_pathways,
     load_scenarios,
+)
+from src.bb_logging import (
+    log_base_profile,
+    log_final_profile,
+    log_matched_pathways,
+    log_facilities_selected,
+    log_district_context,
+    log_action_plan_input,
+    log_nfhs_lookup_trace,
 )
 from src.profile_extractor import extract_profile_with_trace
 from src.followup import (
@@ -48,6 +58,9 @@ from src.agent_trace import empty_agent_trace, rules_engine_trace, step_display_
 from src.state_store import StateStore
 from src.ui_helpers import (
     ai_mode_label,
+    badge_ai_label,
+    badge_data_label,
+    badge_state_label,
     data_source_label,
     district_context_rows,
     format_facility,
@@ -83,6 +96,7 @@ _STATE_DEFAULTS: dict = {
     "nfhs_rows": [],
     "facilities_list": [],
     "district_info": {},
+    "nfhs_lookup_trace": {},
     "session_id": None,
     "feedback_submitted": False,
 }
@@ -96,12 +110,19 @@ data_status = get_data_source_status()
 
 # -- Header -------------------------------------------------------------------
 st.title("BenefitBridge AI")
-_badge = (
-    f"{data_source_label(DATA_MODE, data_status.get('active_source'), data_status.get('fallback_reason'))}  -  "
-    f"{state_store_label(STATE_STORE_MODE)}  -  "
-    f"{ai_mode_label(CLAUDE_AVAILABLE, CLAUDE_MODEL)}"
+_pill = (
+    "background:#e8f4f8;color:#1a3a4f;border:1px solid #b8d8e8;"
+    "padding:3px 11px;border-radius:12px;font-size:0.75rem;font-weight:600;"
+    "display:inline-block;margin-right:6px;"
 )
-st.caption(_badge)
+st.markdown(
+    f'<div style="margin:4px 0 16px;">'
+    f'<span style="{_pill}">{badge_data_label(DATA_MODE, data_status.get("active_source"), data_status.get("fallback_reason"))}</span>'
+    f'<span style="{_pill}">{badge_state_label(STATE_STORE_MODE)}</span>'
+    f'<span style="{_pill}">{badge_ai_label(CLAUDE_AVAILABLE, CLAUDE_MODEL)}</span>'
+    f'</div>',
+    unsafe_allow_html=True,
+)
 
 tab1, tab2, tab3 = st.tabs(
     ["Family Navigator", "Program Leader Dashboard", "Data Trust / Debug"]
@@ -115,8 +136,37 @@ with tab1:
 
     # -- SCREEN 1: Scenario input --------------------------------------------
     if step == 0:
+        _bridge_svg = (
+            '<svg viewBox="0 0 200 64" xmlns="http://www.w3.org/2000/svg" width="130" height="42">'
+            '<rect x="5" y="52" width="190" height="5" rx="2" fill="#7ec8e3"/>'
+            '<rect x="38" y="20" width="9" height="37" rx="2" fill="#7ec8e3"/>'
+            '<rect x="153" y="20" width="9" height="37" rx="2" fill="#7ec8e3"/>'
+            '<path d="M 42 20 Q 100 3 157 20" stroke="#a0d8ef" stroke-width="3"'
+            ' fill="none" stroke-linecap="round"/>'
+            '<line x1="42" y1="20" x2="8" y2="52" stroke="#a0d8ef" stroke-width="1.5" stroke-linecap="round"/>'
+            '<line x1="157" y1="20" x2="192" y2="52" stroke="#a0d8ef" stroke-width="1.5" stroke-linecap="round"/>'
+            '<line x1="72" y1="12" x2="72" y2="52" stroke="#a0d8ef" stroke-width="1.5" stroke-linecap="round"/>'
+            '<line x1="100" y1="6" x2="100" y2="52" stroke="#a0d8ef" stroke-width="1.5" stroke-linecap="round"/>'
+            '<line x1="128" y1="12" x2="128" y2="52" stroke="#a0d8ef" stroke-width="1.5" stroke-linecap="round"/>'
+            '</svg>'
+        )
+        st.markdown(
+            f'<div style="background:linear-gradient(135deg,#1a3a4f 0%,#1d6b8a 100%);'
+            f'border-radius:10px;padding:24px 32px;margin-bottom:20px;">'
+            f'<div style="display:flex;align-items:center;gap:20px;margin-bottom:12px;">'
+            f'{_bridge_svg}'
+            f'<div>'
+            f'<div style="color:#ffffff;font-size:1.5rem;font-weight:700;'
+            f'letter-spacing:-0.2px;margin-bottom:5px;">BenefitBridge AI</div>'
+            f'<div style="color:#a9d8ed;font-size:1rem;">From family needs to trusted health support in minutes.</div>'
+            f'</div></div>'
+            f'<div style="color:#8ecfe0;font-size:0.9rem;line-height:1.6;">'
+            f'Describe a family situation in plain language. The app asks smart follow-up questions, '
+            f'matches support pathways, and creates a grounded action plan using trusted data.'
+            f'</div></div>',
+            unsafe_allow_html=True,
+        )
         st.subheader("Tell us about your family")
-        st.caption("Describe your family's situation and health needs in your own words.")
 
         raw = st.text_area(
             "Describe your family's situation and health needs",
@@ -157,6 +207,7 @@ with tab1:
                 nfhs_rows: list[dict] = []
                 facilities: list[dict] = []
 
+                nfhs_lookup_trace_val: dict = {}
                 if pincode:
                     district_info = get_district_for_pincode(pincode) or {}
                     if district_info:
@@ -165,9 +216,14 @@ with tab1:
                         nfhs_rows = get_nfhs_for_district(
                             district_info["district_norm"], district_info["state_norm"]
                         )
+                        nfhs_lookup_trace_val = get_nfhs_lookup_trace(
+                            district_info["district_norm"], district_info["state_norm"]
+                        )
                         facilities = get_facilities(
                             pincode, district_info["district_norm"], district_info["state_norm"]
                         )
+                log_base_profile(base_profile, pincode_source="pincode_district_lookup")
+                log_nfhs_lookup_trace(nfhs_lookup_trace_val)
 
                 followup_qs, followup_trace = generate_followup_questions_with_trace(
                     base_profile, raw.strip()
@@ -183,6 +239,7 @@ with tab1:
             }
             st.session_state.district_info = district_info
             st.session_state.nfhs_rows = nfhs_rows
+            st.session_state.nfhs_lookup_trace = nfhs_lookup_trace_val
             st.session_state.facilities_list = facilities
             st.session_state.followup_questions = followup_qs
             st.session_state.followup_answers = {}
@@ -300,9 +357,13 @@ with tab1:
 
             # 3 - Merge base_profile + followup_updates -> final_profile
             final_profile = merge_profile(base_profile, followup_updates)
+            log_final_profile(final_profile)
 
             # 4 - Match pathways using final_profile (not base_profile)
             matched = match_pathways(final_profile, pathways)
+            log_matched_pathways(matched)
+            log_facilities_selected(st.session_state.facilities_list)
+            log_district_context(st.session_state.get("nfhs_lookup_trace") or {})
 
             # 5 - Generate action plan
             spin_msg = (
@@ -316,6 +377,7 @@ with tab1:
                     matched,
                     st.session_state.nfhs_rows,
                     st.session_state.facilities_list,
+                    followup_answers=form_answers,
                 )
             agent_trace = dict(st.session_state.get("agent_trace") or empty_agent_trace())
             agent_trace["action_plan"] = action_trace
@@ -638,6 +700,37 @@ with tab3:
             "Copy `.env.example` to `.env` and add your key to enable Claude."
         )
 
+    st.markdown("---")
+    st.markdown("#### Trusted Data Sources")
+    _TRUSTED_TABLE_PURPOSES = {
+        "facilities": "Health facility directory — name, address, phone, specialties",
+        "pincode_district_lookup": "PIN code to district/state mapping (primary, with coordinates)",
+        "india_post_pincode_directory": "India Post PIN directory — fallback district lookup",
+        "nfhs_5_district_health_indicators": "NFHS-5 district health indicators — maternal, child, immunization, nutrition",
+        "support_pathways": "Support pathway rules — trigger conditions, recommended actions",
+    }
+    _active_src = source_status.get("active_source", "json")
+    _src_label = "Unity Catalog trusted tables" if _active_src == "uc" else "Local sample JSON reference"
+    st.caption(f"Source: {_src_label}")
+    for _tbl, _purpose in _TRUSTED_TABLE_PURPOSES.items():
+        _tbl_status = source_status.get("tables", {}).get(_tbl, {})
+        _rows = _tbl_status.get("row_count", 0)
+        _src = _tbl_status.get("source", "not loaded")
+        st.write(f"**`{_tbl}`** ({_rows} rows, {_src}) — {_purpose}")
+
+    st.markdown("---")
+    st.markdown("#### NFHS District Lookup Trace (current session)")
+    _nfhs_trace = st.session_state.get("nfhs_lookup_trace") or {}
+    if _nfhs_trace:
+        st.write(f"**Requested:** {_nfhs_trace.get('requested_district')} / {_nfhs_trace.get('requested_state')}")
+        st.write(f"**Match type:** `{_nfhs_trace.get('match_type')}`")
+        st.write(f"**Matched district:** {_nfhs_trace.get('matched_district')} / {_nfhs_trace.get('matched_state')}")
+        st.write(f"**Alias candidates tried:** {_nfhs_trace.get('alias_candidates_tried')}")
+        st.write(f"**State rows available:** {_nfhs_trace.get('state_row_count', 0)} | **Rows returned:** {_nfhs_trace.get('candidate_row_count', 0)}")
+    else:
+        st.info("No NFHS lookup trace yet. Complete a Family Navigator query with a valid PIN code.")
+
+    st.markdown("---")
     st.markdown("#### Claude Agent Trace")
     agent_trace = st.session_state.get("agent_trace") or empty_agent_trace()
     trace_rows = [

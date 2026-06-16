@@ -289,6 +289,33 @@ def service_tags_for_facility(facility: dict, limit: int = 3) -> list[str]:
     return tags
 
 
+def badge_data_label(
+    data_mode: str,
+    active_source: str | None = None,
+    fallback_reason: str | None = None,
+) -> str:
+    """Short pill label for the data-source badge."""
+    if fallback_reason or active_source == "json_fallback":
+        return "Data: Local sample JSON"
+    if data_mode.lower().strip() == "uc":
+        return "Data: Unity Catalog"
+    return "Data: Local sample JSON"
+
+
+def badge_state_label(state_mode: str) -> str:
+    """Short pill label for the state-store badge."""
+    if state_mode.lower().strip() == "lakebase":
+        return "State: Lakebase"
+    return "State: SQLite"
+
+
+def badge_ai_label(claude_available: bool, claude_model: str) -> str:
+    """Short pill label for the AI-mode badge."""
+    if not claude_available:
+        return "AI: Deterministic"
+    return "AI: Claude Sonnet"
+
+
 def facility_card_public_text(facility: dict) -> str:
     fd = format_facility(facility)
     parts = [fd["name"], fd["address"], fd["phone"], fd["email"]]

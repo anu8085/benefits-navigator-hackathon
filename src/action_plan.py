@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 from .config import ANTHROPIC_API_KEY, CLAUDE_MODEL, CLAUDE_AVAILABLE
+from .bb_logging import log_action_plan_input
 
 _PLAN_SYSTEM = """\
 You are a health benefits navigator AI for families in India.
 Generate a concise, actionable benefit enrollment plan in plain English (max 400 words).
-Structure it as numbered steps the family can take TODAY.
+
+FAMILY INTRODUCTION:
+Begin with a 2-3 sentence introductory paragraph that names this family's specific situation
+(pregnancy status, child age, insurance/cost situation), notes that the guidance is based on
+trusted NFHS-5 district health data, and reminds the reader that this guidance supplements
+but does not replace advice from a qualified health worker or local Anganwadi/PHC.
+
+Then continue with numbered action steps the family can take TODAY.
 Refer to the Nearby Health Facilities section below instead of listing facility names.
 Use language simple enough for a community health worker to read aloud.
 
@@ -83,10 +91,11 @@ def generate_action_plan(
     matched_pathways: list[dict],
     nfhs_rows: list[dict],
     facilities: list[dict],
+    followup_answers: dict | None = None,
 ) -> tuple[str, str]:
     """Return (plan_text, method), where method is 'claude' or 'deterministic'."""
     plan_text, method, _trace = generate_action_plan_with_trace(
-        profile, matched_pathways, nfhs_rows, facilities
+        profile, matched_pathways, nfhs_rows, facilities, followup_answers
     )
     return plan_text, method
 
@@ -96,8 +105,10 @@ def generate_action_plan_with_trace(
     matched_pathways: list[dict],
     nfhs_rows: list[dict],
     facilities: list[dict],
+    followup_answers: dict | None = None,
 ) -> tuple[str, str, dict]:
     """Return (plan_text, method, trace)."""
+    log_action_plan_input(profile, matched_pathways, nfhs_rows, facilities, followup_answers)
     trace = {
         "provider": "deterministic",
         "model": None,
@@ -135,6 +146,12 @@ def generate_action_plan_with_trace(
                 else "No facilities in local dataset\n"
             )
 
+            followup_lines = ""
+            if followup_answers:
+                followup_lines = "Family follow-up answers:\n" + "".join(
+                    f"  {k}: {v}\n" for k, v in followup_answers.items() if v
+                )
+
             user_msg = (
                 f"Family location: {location}\n"
                 f"Profile: pregnant={profile.get('pregnant')}, "
@@ -145,6 +162,7 @@ def generate_action_plan_with_trace(
                 f"Matched support pathways:\n{pathway_lines}\n"
                 f"District health context (NFHS-5):\n{nfhs_lines or 'No data available'}\n"
                 f"Nearby facility section:\n{fac_lines}\n"
+                f"{followup_lines}"
                 "Generate a numbered action plan for this family."
             )
 

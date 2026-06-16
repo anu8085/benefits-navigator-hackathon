@@ -30,6 +30,23 @@ _DISTRICT_ALIAS: dict[str, str] = {
     "RAMANAGARA": "RAMANAGARAM",
 }
 
+# Ordered candidate NFHS district_name values to try for each district_norm.
+# First match within the correct state wins; the district_norm itself is the final fallback.
+_NFHS_ALIAS_CANDIDATES: dict[str, list[str]] = {
+    "BENGALURU URBAN": ["BANGALORE", "BENGALURU URBAN", "BENGALURU", "BANGALORE URBAN"],
+    "BENGALURU RURAL": ["BANGALORE RURAL", "BENGALURU RURAL"],
+    "MYSURU": ["MYSORE", "MYSURU"],
+    "KALABURAGI": ["GULBARGA", "KALABURAGI"],
+    "VIJAYAPURA": ["BIJAPUR", "VIJAYAPURA"],
+    "BELAGAVI": ["BELGAUM", "BELAGAVI"],
+    "BALLARI": ["BELLARY", "BALLARI"],
+    "SHIVAMOGGA": ["SHIMOGA", "SHIVAMOGGA"],
+    "TUMAKURU": ["TUMKUR", "TUMAKURU"],
+    "DAVANAGERE": ["DAVANGERE", "DAVANAGERE"],
+    "CHIKKAMAGALURU": ["CHIKMAGALUR", "CHIKKAMAGALURU"],
+    "RAMANAGARA": ["RAMANAGARAM", "RAMANAGARA"],
+}
+
 _UC_TABLES: set[str] = {
     "facilities",
     "india_post_pincode_directory",
@@ -214,20 +231,101 @@ def get_district_for_pincode(pincode: str) -> dict | None:
     return None
 
 
+def _nfhs_alias_candidates(district_norm: str) -> list[str]:
+    """Ordered alias candidates to try against NFHS district_name within the correct state."""
+    specific = _NFHS_ALIAS_CANDIDATES.get(district_norm)
+    if specific:
+        return specific
+    simple = _DISTRICT_ALIAS.get(district_norm)
+    if simple and simple != district_norm:
+        return [simple, district_norm]
+    return [district_norm]
+
+
 def get_nfhs_for_district(district_norm: str, state_norm: str) -> list[dict]:
-    """Return NFHS rows matching the district (via alias map) or state fallback."""
+    """Return NFHS rows, state-first filtered, then alias-priority matched."""
     rows = _load("nfhs_5_district_health_indicators")
-    alias = _DISTRICT_ALIAS.get(district_norm, district_norm)
+    # Step 1: restrict to the correct state so we never cross-match another state
+    state_rows = [r for r in rows if _norm(r.get("state_ut")) == state_norm]
 
-    matches = [
-        r for r in rows
-        if _norm(r.get("district_name")) in (district_norm, alias)
-    ]
-    if matches:
-        return matches
+    # Step 2: exact district match within state
+    exact = [r for r in state_rows if _norm(r.get("district_name")) == district_norm]
+    if exact:
+        return exact
 
-    # State-level fallback (capped to avoid returning too much data)
-    return [r for r in rows if _norm(r.get("state_ut")) == state_norm][:5]
+    # Step 3: alias candidates in priority order, within state
+    for candidate in _nfhs_alias_candidates(district_norm):
+        alias_matches = [r for r in state_rows if _norm(r.get("district_name")) == candidate]
+        if alias_matches:
+            return alias_matches
+
+    # Step 4: state-level fallback (capped)
+    return state_rows[:5]
+
+
+def get_nfhs_lookup_trace(district_norm: str, state_norm: str) -> dict:
+    """Describe how NFHS rows were resolved; useful for the debug tab."""
+    rows = _load("nfhs_5_district_health_indicators")
+    state_rows = [r for r in rows if _norm(r.get("state_ut")) == state_norm]
+    candidates = _nfhs_alias_candidates(district_norm)
+
+    exact = [r for r in state_rows if _norm(r.get("district_name")) == district_norm]
+    if exact:
+        return {
+            "requested_district": district_norm,
+            "requested_state": state_norm,
+            "normalized_district": district_norm,
+            "normalized_state": state_norm,
+            "alias_candidates_tried": candidates,
+            "state_row_count": len(state_rows),
+            "match_type": "exact",
+            "matched_district": _norm(exact[0].get("district_name")),
+            "matched_state": _norm(exact[0].get("state_ut")),
+            "candidate_row_count": len(exact),
+        }
+
+    for candidate in candidates:
+        alias_matches = [r for r in state_rows if _norm(r.get("district_name")) == candidate]
+        if alias_matches:
+            return {
+                "requested_district": district_norm,
+                "requested_state": state_norm,
+                "normalized_district": district_norm,
+                "normalized_state": state_norm,
+                "alias_candidates_tried": candidates,
+                "state_row_count": len(state_rows),
+                "match_type": "alias",
+                "matched_district": _norm(alias_matches[0].get("district_name")),
+                "matched_state": _norm(alias_matches[0].get("state_ut")),
+                "candidate_row_count": len(alias_matches),
+            }
+
+    if state_rows:
+        return {
+            "requested_district": district_norm,
+            "requested_state": state_norm,
+            "normalized_district": district_norm,
+            "normalized_state": state_norm,
+            "alias_candidates_tried": candidates,
+            "state_row_count": len(state_rows),
+            "match_type": "state_fallback",
+            "matched_district": None,
+            "matched_state": state_norm,
+            "candidate_row_count": min(len(state_rows), 5),
+        }
+
+    return {
+        "requested_district": district_norm,
+        "requested_state": state_norm,
+        "normalized_district": district_norm,
+        "normalized_state": state_norm,
+        "alias_candidates_tried": candidates,
+        "state_row_count": 0,
+        "match_type": "missing",
+        "matched_district": None,
+        "matched_state": None,
+        "candidate_row_count": 0,
+    }
 
 
 def get_facilities(pincode: str, district_norm: str, state_norm: str) -> list[dict]:
