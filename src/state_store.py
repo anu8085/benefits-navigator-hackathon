@@ -165,8 +165,7 @@ class StateStore:
 
 
 _PG_SCHEMA_STMTS = [
-    "CREATE SCHEMA IF NOT EXISTS trustroute_ai_state",
-    """CREATE TABLE IF NOT EXISTS trustroute_ai_state.sessions (
+    """CREATE TABLE IF NOT EXISTS public.sessions (
         id            TEXT PRIMARY KEY,
         created_at    TEXT NOT NULL,
         raw_text      TEXT,
@@ -177,14 +176,14 @@ _PG_SCHEMA_STMTS = [
         state_norm    TEXT,
         lineage_json  TEXT
     )""",
-    """CREATE TABLE IF NOT EXISTS trustroute_ai_state.feedback (
+    """CREATE TABLE IF NOT EXISTS public.feedback (
         id            TEXT PRIMARY KEY,
         session_id    TEXT,
         created_at    TEXT NOT NULL,
         rating        TEXT NOT NULL,
         comment       TEXT
     )""",
-    """CREATE TABLE IF NOT EXISTS trustroute_ai_state.facility_shortlists (
+    """CREATE TABLE IF NOT EXISTS public.facility_shortlists (
         id            TEXT PRIMARY KEY,
         session_id    TEXT,
         created_at    TEXT NOT NULL,
@@ -244,7 +243,7 @@ class LakebaseStateStore:
         now = datetime.utcnow().isoformat(timespec="seconds")
         with self._connect() as conn:
             conn.execute(
-                "INSERT INTO trustroute_ai_state.sessions "
+                "INSERT INTO public.sessions "
                 "(id, created_at, raw_text, profile_json, plan_text, plan_method, "
                 "district_norm, state_norm, lineage_json) "
                 "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
@@ -265,7 +264,7 @@ class LakebaseStateStore:
     def get_recent_sessions(self, limit: int = 20) -> list[dict]:
         with self._connect() as conn:
             cur = conn.execute(
-                "SELECT * FROM trustroute_ai_state.sessions "
+                "SELECT * FROM public.sessions "
                 "ORDER BY created_at DESC LIMIT %s",
                 (limit,),
             )
@@ -274,7 +273,7 @@ class LakebaseStateStore:
     def get_session(self, session_id: str) -> dict | None:
         with self._connect() as conn:
             cur = conn.execute(
-                "SELECT * FROM trustroute_ai_state.sessions WHERE id = %s",
+                "SELECT * FROM public.sessions WHERE id = %s",
                 (session_id,),
             )
             return _pg_row_to_dict(cur)
@@ -289,7 +288,7 @@ class LakebaseStateStore:
         now = datetime.utcnow().isoformat(timespec="seconds")
         with self._connect() as conn:
             conn.execute(
-                "INSERT INTO trustroute_ai_state.feedback "
+                "INSERT INTO public.feedback "
                 "(id, session_id, created_at, rating, comment) "
                 "VALUES (%s, %s, %s, %s, %s)",
                 (feedback_id, session_id, now, rating, comment),
@@ -307,7 +306,7 @@ class LakebaseStateStore:
         now = datetime.utcnow().isoformat(timespec="seconds")
         with self._connect() as conn:
             conn.execute(
-                "INSERT INTO trustroute_ai_state.facility_shortlists "
+                "INSERT INTO public.facility_shortlists "
                 "(id, session_id, created_at, facility_name, facility_data, user_note) "
                 "VALUES (%s, %s, %s, %s, %s, %s)",
                 (
@@ -325,13 +324,13 @@ class LakebaseStateStore:
         with self._connect() as conn:
             if session_id:
                 cur = conn.execute(
-                    "SELECT * FROM trustroute_ai_state.facility_shortlists "
+                    "SELECT * FROM public.facility_shortlists "
                     "WHERE session_id = %s ORDER BY created_at DESC",
                     (session_id,),
                 )
             else:
                 cur = conn.execute(
-                    "SELECT * FROM trustroute_ai_state.facility_shortlists "
+                    "SELECT * FROM public.facility_shortlists "
                     "ORDER BY created_at DESC LIMIT 20"
                 )
             return _pg_rows_to_dicts(cur)
@@ -339,7 +338,7 @@ class LakebaseStateStore:
     def get_recent_feedback(self, limit: int = 20) -> list[dict]:
         with self._connect() as conn:
             cur = conn.execute(
-                "SELECT * FROM trustroute_ai_state.feedback "
+                "SELECT * FROM public.feedback "
                 "ORDER BY created_at DESC LIMIT %s",
                 (limit,),
             )

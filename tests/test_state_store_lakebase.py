@@ -60,11 +60,11 @@ def test_get_state_store_returns_lakebase_when_mode_set(monkeypatch):
 
 # -- Schema SQL sanity --------------------------------------------------------
 
-def test_pg_schema_stmts_creates_schema():
+def test_pg_schema_stmts_no_create_schema():
     from src.state_store import _PG_SCHEMA_STMTS
-    first = _PG_SCHEMA_STMTS[0]
-    assert "CREATE SCHEMA" in first.upper()
-    assert "trustroute_ai_state" in first
+    assert not any("CREATE SCHEMA" in s.upper() for s in _PG_SCHEMA_STMTS), (
+        "CREATE SCHEMA removed: Lakebase denies database-level CREATE; use public schema"
+    )
 
 
 def test_pg_schema_stmts_has_three_tables():
@@ -76,7 +76,7 @@ def test_pg_schema_stmts_has_three_tables():
 def test_pg_schema_stmts_sessions_table():
     from src.state_store import _PG_SCHEMA_STMTS
     sessions_stmt = next(s for s in _PG_SCHEMA_STMTS if "sessions" in s)
-    assert "trustroute_ai_state.sessions" in sessions_stmt
+    assert "public.sessions" in sessions_stmt
     assert "id" in sessions_stmt
     assert "created_at" in sessions_stmt
     assert "plan_text" in sessions_stmt
@@ -86,14 +86,14 @@ def test_pg_schema_stmts_sessions_table():
 def test_pg_schema_stmts_feedback_table():
     from src.state_store import _PG_SCHEMA_STMTS
     fb_stmt = next(s for s in _PG_SCHEMA_STMTS if "feedback" in s)
-    assert "trustroute_ai_state.feedback" in fb_stmt
+    assert "public.feedback" in fb_stmt
     assert "rating" in fb_stmt
 
 
 def test_pg_schema_stmts_shortlists_table():
     from src.state_store import _PG_SCHEMA_STMTS
     sl_stmt = next(s for s in _PG_SCHEMA_STMTS if "facility_shortlists" in s)
-    assert "trustroute_ai_state.facility_shortlists" in sl_stmt
+    assert "public.facility_shortlists" in sl_stmt
     assert "facility_name" in sl_stmt
 
 
@@ -119,7 +119,7 @@ def test_lakebase_save_session_uses_parameterised_query():
         )
         assert sid
         calls = [str(c) for c in dummy_conn.execute.call_args_list]
-        assert any("INSERT INTO trustroute_ai_state.sessions" in c for c in calls)
+        assert any("INSERT INTO public.sessions" in c for c in calls)
 
 
 def test_lakebase_save_feedback_uses_parameterised_query():
@@ -130,7 +130,7 @@ def test_lakebase_save_feedback_uses_parameterised_query():
         fid = store.save_feedback(session_id="s1", rating="Helpful")
         assert fid
         calls = [str(c) for c in dummy_conn.execute.call_args_list]
-        assert any("INSERT INTO trustroute_ai_state.feedback" in c for c in calls)
+        assert any("INSERT INTO public.feedback" in c for c in calls)
 
 
 def test_lakebase_get_recent_sessions_queries_correct_table():
@@ -145,7 +145,7 @@ def test_lakebase_get_recent_sessions_queries_correct_table():
         rows = store.get_recent_sessions(5)
         assert isinstance(rows, list)
         calls = [str(c) for c in dummy_conn.execute.call_args_list]
-        assert any("trustroute_ai_state.sessions" in c for c in calls)
+        assert any("public.sessions" in c for c in calls)
 
 
 def test_lakebase_get_recent_feedback_queries_correct_table():
@@ -160,7 +160,7 @@ def test_lakebase_get_recent_feedback_queries_correct_table():
         rows = store.get_recent_feedback(5)
         assert isinstance(rows, list)
         calls = [str(c) for c in dummy_conn.execute.call_args_list]
-        assert any("trustroute_ai_state.feedback" in c for c in calls)
+        assert any("public.feedback" in c for c in calls)
 
 
 # -- app.yaml existence and content ------------------------------------------
